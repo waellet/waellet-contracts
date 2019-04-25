@@ -30,6 +30,19 @@ contract WaelletTip =
   public function balance(domain:string) : int =
     state.websites[domain].balance
 
+  public stateful function withdraw(domain: string) =
+    is_domain_owner(domain)
+    is_enough_balance(domain)
+    let withdraw_amount = state.websites[domain].balance
+    put(state{websites[domain].balance = 0})
+    Chain.spend(Call.caller, withdraw_amount)
+
+  private function is_domain_owner(domain: string) =
+    require(state.websites[domain].owner == Call.caller, "You are not the owner of this domain")
+
+  private function is_enough_balance(domain: string) =
+    require(state.websites[domain].balance > 0, "Not enough balance")
+
   private stateful function is_website_present(domain: string) =
     if(!Map.member(domain, state.websites))
       let website : website = {
@@ -39,4 +52,3 @@ contract WaelletTip =
         balance = 0, 
         tips = [] }
       put(state{websites[domain] = website})
-
