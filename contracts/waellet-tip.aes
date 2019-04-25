@@ -1,6 +1,17 @@
 contract WaelletTip =
   record state = {
-    websites: map(string, string) }
+    websites: map(string, website) }
+
+  record website = {
+    domain: string,
+    date_expire: int,
+    owner: address,
+    balance: int,
+    tips: list(tip) }
+
+  record tip = {
+    from: address,
+    amount: int }
 
   public stateful function init() = 
     { websites = {} }
