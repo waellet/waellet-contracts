@@ -1,0 +1,31 @@
+{
+  "name": "waellet-contracts",
+  "version": "0.0.1",
+  "description": "These are the smart contracts used by waellet browser extension",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/waellet/waellet-contracts.git"
+  },
+  "keywords": [
+    "waellet",
+    "browser",
+    "aeternity",
+    "smart",
+    "contracts",
+    "sophia"
+  ],
+  "author": "Milen Radkov <milenradkov@me.com> (http://mradkov.com)",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/waellet/waellet-contracts/issues"
+  },
+  "homepage": "https://github.com/waellet/waellet-contracts#readme",
+  "dependencies": {
+    "@aeternity/aepp-sdk": "^3.0.0",
+    "forgae": "^1.3.2"
+  }
+}
