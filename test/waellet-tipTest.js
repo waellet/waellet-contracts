@@ -23,7 +23,7 @@ const config = {
   ttl: 55
 }
 
-describe('Example Contract', () => {
+describe('Waellet Tip Contract', () => {
 
   let owner;
 
@@ -39,8 +39,8 @@ describe('Example Contract', () => {
 
   })
 
-  it('Deploying Example Contract', async () => {
-    let contractSource = utils.readFileRelative('./contracts/ExampleContract.aes', "utf-8"); // Read the aes file
+  it('Deploying Waellet Tip Contract', async () => {
+    let contractSource = utils.readFileRelative('./contracts/waellet-tip.aes', "utf-8"); // Read the aes file
 
     const compiledContract = await owner.contractCompile(contractSource, { // Compile it
       gas: config.gas
@@ -52,7 +52,7 @@ describe('Example Contract', () => {
       }
     });
 
-    await assert.isFulfilled(deployPromise, 'Could not deploy the ExampleContract Smart Contract'); // Check it is deployed
+    await assert.isFulfilled(deployPromise, 'Could not deploy the Waellet Tip Smart Contract'); // Check it is deployed
   })
 
 })

@@ -1,0 +1,6 @@
+contract WaelletTip =
+  record state = {
+    websites: map(string, string) }
+
+  public stateful function init() = 
+    { websites = {} }
