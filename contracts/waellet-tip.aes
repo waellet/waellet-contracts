@@ -37,6 +37,9 @@ contract WaelletTip =
     put(state{websites[domain].balance = 0})
     Chain.spend(Call.caller, withdraw_amount)
 
+  private function challange_check(domain: string) =
+    // Call oracle and verify challange
+
   private function is_domain_owner(domain: string) =
     require(state.websites[domain].owner == Call.caller, "You are not the owner of this domain")
 
