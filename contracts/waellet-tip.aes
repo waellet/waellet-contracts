@@ -11,7 +11,32 @@ contract WaelletTip =
 
   record tip = {
     from: address,
+    date: int,
     amount: int }
 
   public stateful function init() = 
     { websites = {} }
+
+  public stateful function tip(domain: string) =
+    is_website_present(domain)
+    let tip : tip = {
+      from = Call.caller,
+      date = 1,
+      amount = Call.value }
+
+    put(state{websites[domain].tips = tip :: state.websites[domain].tips})
+    put(state{websites[domain].balance = Call.value + state.websites[domain].balance})
+
+  public function balance(domain:string) : int =
+    state.websites[domain].balance
+
+  private stateful function is_website_present(domain: string) =
+    if(!Map.member(domain, state.websites))
+      let website : website = {
+        domain = domain,
+        date_expire = 0,
+        owner = #0,
+        balance = 0, 
+        tips = [] }
+      put(state{websites[domain] = website})
+
