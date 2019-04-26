@@ -1,6 +1,66 @@
 contract WaelletTip =
   record state = {
-    websites: map(string, string) }
+    websites: map(string, website) }
+
+  record website = {
+    domain: string,
+    date_expire: int,
+    owner: address,
+    balance: int,
+    tips: list(tip) }
+
+  record tip = {
+    from: address,
+    date: int,
+    amount: int }
 
   public stateful function init() = 
     { websites = {} }
+
+  public stateful function tip(domain: string) =
+    is_website_present(domain)
+    let tip : tip = {
+      from = Call.caller,
+      date = 1,
+      amount = Call.value }
+
+    put(state{websites[domain].tips = tip :: state.websites[domain].tips})
+    put(state{websites[domain].balance = Call.value + state.websites[domain].balance})
+
+  public function balance(domain:string) : int =
+    state.websites[domain].balance
+
+  public stateful function claim(domain: string) : string =
+    is_domain_expired(domain)
+    challange_generate(domain)
+
+  public stateful function withdraw(domain: string) =
+    is_domain_owner(domain)
+    is_enough_balance(domain)
+    let withdraw_amount = state.websites[domain].balance
+    put(state{websites[domain].balance = 0})
+    Chain.spend(Call.caller, withdraw_amount)
+
+  private stateful function challange_generate(domain: string) : string =
+    let challenge = String.sha3(domain)
+    put(state{websites[domain].challenge = challenge})
+    challenge
+
+  private function challange_check(domain: string) =
+    // Call oracle and verify challange
+
+  private function is_domain_owner(domain: string) =
+    require(state.websites[domain].owner == Call.caller, "You are not the owner of this domain")
+
+  private function is_enough_balance(domain: string) =
+    require(state.websites[domain].balance > 0, "Not enough balance")
+
+  private stateful function is_website_present(domain: string) =
+    if(!Map.member(domain, state.websites))
+      let website : website = {
+        domain = domain,
+        date_expire = 0,
+        owner = #0,
+        balance = 0, 
+        tips = [] }
+      put(state{websites[domain] = website})
