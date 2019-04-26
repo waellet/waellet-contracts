@@ -41,9 +41,10 @@ contract WaelletTip =
     put(state{websites[domain].balance = 0})
     Chain.spend(Call.caller, withdraw_amount)
 
-  private stateful function challange_generate(domain: string) =
+  private stateful function challange_generate(domain: string) : string =
     let challenge = String.sha3(domain)
     put(state{websites[domain].challenge = challenge})
+    challenge
 
   private function challange_check(domain: string) =
     // Call oracle and verify challange
