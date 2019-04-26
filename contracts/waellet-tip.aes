@@ -30,12 +30,20 @@ contract WaelletTip =
   public function balance(domain:string) : int =
     state.websites[domain].balance
 
+  public stateful function claim(domain: string) : string =
+    is_domain_expired(domain)
+    challange_generate(domain)
+
   public stateful function withdraw(domain: string) =
     is_domain_owner(domain)
     is_enough_balance(domain)
     let withdraw_amount = state.websites[domain].balance
     put(state{websites[domain].balance = 0})
     Chain.spend(Call.caller, withdraw_amount)
+
+  private stateful function challange_generate(domain: string) =
+    let challenge = String.sha3(domain)
+    put(state{websites[domain].challenge = challenge})
 
   private function challange_check(domain: string) =
     // Call oracle and verify challange
