@@ -44,9 +44,17 @@ contract WaelletTip =
   public stateful function withdraw(domain: string) =
     is_domain_owner(domain)
     is_enough_balance(domain)
-    let withdraw_amount = state.websites[domain].balance
-    put(state{websites[domain].balance = 0})
+    let withdraw_amount = get_withdraw_amount(domain: string)
+    require(withdraw_amount > 0, "You dont have pending balance for withdrawal")
+    put(state{websites[domain].balance = state.websites[domain].balance - withdraw_amount})
     Chain.spend(Call.caller, withdraw_amount)
+
+  private function get_withdraw_amount(domain: string) : int =
+    // get all tips for the domain
+    // filter the tips for the current timeframe ownership
+    // filter the repaid tips
+    // return the possible withdraw amount
+    0 
 
   private stateful function challenge_generate(domain: string) : string =
     let challenge =  Int.to_str(String.sha3(domain))
