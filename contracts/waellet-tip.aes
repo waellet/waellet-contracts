@@ -6,7 +6,7 @@ contract WaelletTip =
     domain: string,
     challenge: string,
     date_expire: int,
-    owner: map(address, date),
+    owner: map(address, timeframe),
     balance: int,
     tips: list(tip) }
 
@@ -15,7 +15,7 @@ contract WaelletTip =
     date_received: int,
     amount: int }
 
-  record date = {
+  record timeframe = {
     date_from: int,
     date_to: int }
 
