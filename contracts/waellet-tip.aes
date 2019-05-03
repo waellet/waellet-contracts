@@ -11,6 +11,7 @@ contract WaelletTip =
     tips: list(tip) }
 
   record tip = {
+    repaid: bool,
     sender: address,
     date_received: int,
     amount: int }
