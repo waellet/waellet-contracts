@@ -51,8 +51,9 @@ contract WaelletTip =
     put(state{websites[domain].challenge = challenge})
     challenge
 
-  // private function challenge_check(domain: string) =
-  //   // Call oracle and verify challenge
+  private function challenge_check(domain: string) : bool =
+    // Call oracle and verify challenge
+    true
 
   private function is_domain_owner(domain: string) =
     require(state.websites[domain].owner[Call.caller].date_to != 0, "You are not the owner of this domain")
