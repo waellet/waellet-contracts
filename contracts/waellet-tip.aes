@@ -26,6 +26,7 @@ contract WaelletTip =
   public stateful function tip(domain: string) =
     is_website_present(domain)
     let tip : tip = {
+      repaid = false,
       sender = Call.caller,
       date_received = Chain.timestamp,
       amount = Call.value }
@@ -57,9 +58,7 @@ contract WaelletTip =
     true
 
   private function is_domain_owner(domain: string) =
-    require(state.websites[domain].owner[Call.caller].date_to != 0, "You are not the owner of this domain")
-    require(state.websites[domain].owner[Call.caller].date_from =< Chain.timestamp, "You are not the owner of this domain")
-    require(state.websites[domain].owner[Call.caller].date_to >= Chain.timestamp, "You are not the owner of this domain")
+    require(state.websites[domain].owner[Call.caller].date_to != 0 && state.websites[domain].owner[Call.caller].date_from =< Chain.timestamp && state.websites[domain].owner[Call.caller].date_to >= Chain.timestamp, "You are not the owner of this domain")
 
   private function is_enough_balance(domain: string) =
     require(state.websites[domain].balance > 0, "Not enough balance")
