@@ -26,6 +26,7 @@ contract WaelletTip =
   public stateful function tip(domain: string) =
     is_website_present(domain)
     let tip : tip = {
+      repaid = false,
       sender = Call.caller,
       date_received = Chain.timestamp,
       amount = Call.value }
@@ -43,9 +44,28 @@ contract WaelletTip =
   public stateful function withdraw(domain: string) =
     is_domain_owner(domain)
     is_enough_balance(domain)
-    let withdraw_amount = state.websites[domain].balance
-    put(state{websites[domain].balance = 0})
+    let tips_for_payment_list = get_tips_for_payment_list(domain: string)
+    let withdraw_amount = get_withdraw_amount(tips_for_payment_list)
+    require(withdraw_amount > 0, "You dont have pending balance for withdrawal")
+    put(state{websites[domain].balance = state.websites[domain].balance - withdraw_amount})
+    require(set_tips_repaid(tips_for_payment_list), "Something went wrong with the tips")
     Chain.spend(Call.caller, withdraw_amount)
+
+  private function get_withdraw_amount(tips_for_payment: list(tip)) : int =
+    // filter the tips for the current timeframe ownership
+    // filter the repaid tips
+    // return the possible withdraw amount
+    0 
+
+  private function get_tips_for_payment_list(domain: string) : list(tip) =
+    // check if the call.caller is the domain owner
+    // return all the tips for certain domain
+    []
+
+  private stateful function set_tips_repaid(tips: list(tip)) : bool =
+    // iterate over all the tips in list and set the repaid property to true
+    // this is to prevent reentrancy
+    true
 
   private stateful function challenge_generate(domain: string) : string =
     let challenge =  Int.to_str(String.sha3(domain))
@@ -57,9 +77,10 @@ contract WaelletTip =
     true
 
   private function is_domain_owner(domain: string) =
-    require(state.websites[domain].owner[Call.caller].date_to != 0, "You are not the owner of this domain")
-    require(state.websites[domain].owner[Call.caller].date_from =< Chain.timestamp, "You are not the owner of this domain")
-    require(state.websites[domain].owner[Call.caller].date_to >= Chain.timestamp, "You are not the owner of this domain")
+    require(state.websites[domain].owner[Call.caller].date_to != 0
+      && state.websites[domain].owner[Call.caller].date_from =< Chain.timestamp
+      && state.websites[domain].owner[Call.caller].date_to >= Chain.timestamp
+      , "You are not the owner of this domain")
 
   private function is_enough_balance(domain: string) =
     require(state.websites[domain].balance > 0, "Not enough balance")
