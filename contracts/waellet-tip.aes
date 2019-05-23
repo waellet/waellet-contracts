@@ -5,6 +5,7 @@ contract WaelletTip =
   record website = {
     domain: string,
     challenge: string,
+    verified: bool,
     date_expire: int,
     owner: map(address, timeframe),
     balance: int,
@@ -62,7 +63,7 @@ contract WaelletTip =
     // return all the tips for certain domain
     []
 
-  private stateful function set_tips_repaid(tips: list(tip)) : bool =
+  private function set_tips_repaid(tips: list(tip)) : bool =
     // iterate over all the tips in list and set the repaid property to true
     // this is to prevent reentrancy
     true
@@ -106,9 +107,10 @@ contract WaelletTip =
       let website : website = {
         domain = domain,
         challenge = challenge_generate(domain),
+        verified = false,
         date_expire = 0,
         owner = {},
-        balance = 0, 
+        balance = 0,
         tips = [] }
       put(state{websites[domain] = website})
 
@@ -149,7 +151,6 @@ contract WaelletTip =
           filter'(f, l', e :: acc)
         else
           filter'(f, l', acc)
-
 
   private function is_greater_zero(x : int) : bool = x > 0
 
