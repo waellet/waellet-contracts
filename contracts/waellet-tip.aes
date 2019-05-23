@@ -4,7 +4,7 @@ contract WaelletTip =
 
   record website = {
     domain: string,
-    challenge: string,
+    challenge: hash,
     verified: bool,
     date_expire: int,
     owner: map(address, timeframe),
@@ -20,6 +20,10 @@ contract WaelletTip =
   record timeframe = {
     date_from: int,
     date_to: int }
+
+  datatype event = 
+      LogTipReceived(indexed address, indexed int, string) 
+    | LogWebsiteVerified(indexed address, indexed int, string)
 
   public stateful function init() = 
     { websites = {} }
@@ -38,7 +42,7 @@ contract WaelletTip =
   public function balance(domain:string) : int =
     state.websites[domain].balance
 
-  public stateful function claim(domain: string) : string =
+  public stateful function claim(domain: string) : hash =
     is_domain_expired(domain)
     challenge_generate(domain)
 
@@ -68,8 +72,8 @@ contract WaelletTip =
     // this is to prevent reentrancy
     true
 
-  private stateful function challenge_generate(domain: string) : string =
-    let challenge =  Int.to_str(String.sha3(domain))
+  private stateful function challenge_generate(domain: string) : hash =
+    let challenge = String.sha3(domain)
     put(state{websites[domain].challenge = challenge})
     challenge
 
