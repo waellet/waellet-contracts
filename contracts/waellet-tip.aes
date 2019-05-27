@@ -38,6 +38,7 @@ contract WaelletTip =
 
     put(state{websites[domain].tips = tip :: state.websites[domain].tips})
     put(state{websites[domain].balance = Call.value + state.websites[domain].balance})
+    Chain.event(LogTipReceived(Call.caller, Call.value, domain))
 
   public function balance(domain:string) : int =
     state.websites[domain].balance
