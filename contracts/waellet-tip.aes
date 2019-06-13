@@ -33,8 +33,8 @@ contract WaelletTip =
       date_received = Chain.timestamp,
       amount = Call.value }
 
-    put(state{websites[domain].tips = tip :: state.websites[domain].tips})
-    put(state{websites[domain].balance = Call.value + state.websites[domain].balance})
+    put(state{ websites[domain].tips = tip :: state.websites[domain].tips })
+    put(state{ websites[domain].balance = Call.value + state.websites[domain].balance })
     Chain.event(LogTipReceived(Call.caller, Call.value, domain))
 
   public function balance(domain:string) : int =
@@ -47,11 +47,17 @@ contract WaelletTip =
   public stateful function withdraw(domain: string) =
     is_domain_owner(domain)
     is_enough_balance(domain)
+
     let tips_for_payment_list = get_tips_for_payment_list(domain: string)
+
     let withdraw_amount = get_withdraw_amount(tips_for_payment_list)
+
     require(withdraw_amount > 0, "You dont have pending balance for withdrawal")
+    
     put(state{websites[domain].balance = state.websites[domain].balance - withdraw_amount})
+    
     require(set_tips_repaid(tips_for_payment_list), "Something went wrong with the tips")
+    
     Chain.spend(Call.caller, withdraw_amount)
 
   private function get_withdraw_amount(tips_for_payment: list(tip)) : int =
