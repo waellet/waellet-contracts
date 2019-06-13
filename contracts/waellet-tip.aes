@@ -1,25 +1,22 @@
 contract WaelletTip =
-  record state = {
-    websites: map(string, website) }
 
-  record website = {
-    domain: string,
-    challenge: hash,
-    verified: bool,
-    date_expire: int,
-    owner: map(address, timeframe),
-    balance: int,
-    tips: list(tip) }
+  record state = { websites: map(string, website) }
 
-  record tip = {
-    repaid: bool,
-    sender: address,
-    date_received: int,
-    amount: int }
+  record website = { domain: string
+                   , challenge: hash
+                   , verified: bool
+                   , date_expire: int
+                   , owner: map(address, timeframe)
+                   , balance: int
+                   , tips: list(tip) }
 
-  record timeframe = {
-    date_from: int,
-    date_to: int }
+  record tip = { repaid: bool
+               , sender: address
+               , date_received: int
+               , amount: int }
+
+  record timeframe = { date_from: int
+                     , date_to: int }
 
   datatype event = 
       LogTipReceived(indexed address, indexed int, string) 
