@@ -21,6 +21,7 @@ contract WaelletTip =
   datatype event = 
       LogTipReceived(indexed address, indexed int, string) 
     | LogWebsiteVerified(indexed address, indexed int, string)
+    | LogTipsWithdrawn(indexed address, indexed int)
 
   public stateful function init() = 
     { websites = {} }
@@ -59,6 +60,7 @@ contract WaelletTip =
     require(set_tips_repaid(tips_for_payment_list), "Something went wrong with the tips")
     
     Chain.spend(Call.caller, withdraw_amount)
+    Chain.event(LogTipsWithdrawn(Call.caller, withdraw_amount))
 
   private function get_withdraw_amount(tips_for_payment: list(tip)) : int =
     // filter the tips for the current timeframe ownership
