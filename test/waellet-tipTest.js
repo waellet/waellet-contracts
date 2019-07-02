@@ -14,46 +14,23 @@
  *  OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  *  PERFORMANCE OF THIS SOFTWARE.
  */
-const Ae = require('@aeternity/aepp-sdk').Universal;
 
-const config = {
-    host: "http://localhost:3001/",
-    internalHost: "http://localhost:3001/internal/",
-    gas: 200000,
-    ttl: 55,
-    compilerUrl: 'https://compiler.aepps.com'
-}
 
-describe('Example Contract', () => {
+const Deployer = require('forgae-lib').Deployer;
+const WAELLET_CONTRACT_PATH = "./contracts/waellet-tip.aes";
 
-    let owner;
-    let options = {
-        ttl: config.ttl
-    }
+describe('Waellet Tip Contract', () => {
 
+    let deployer;
+    let ownerKeyPair = wallets[0];
+    
     before(async () => {
-        const ownerKeyPair = wallets[0];
-        owner = await Ae({
-            url: config.host,
-            internalUrl: config.internalHost,
-            keypair: ownerKeyPair,
-            nativeMode: true,
-            networkId: 'ae_devnet',
-            compilerUrl: config.compilerUrl
-        });
-
+        deployer = new Deployer('local', ownerKeyPair.secretKey)
     })
 
-    it('Deploying Waellet Tip Contract', async () => {
-        let contractSource = utils.readFileRelative('./contracts/waellet-tip.aes', "utf-8"); // Read the aes file
+    it('Deploying Example Contract', async () => {
+        const deployPromise = deployer.deploy(WAELLET_CONTRACT_PATH) // Deploy it
 
-        const compiledContract = await owner.contractCompile(contractSource, { // Compile it
-        })
-        // Deploy it
-        // [] - empty init state object
-        const deployPromise = compiledContract.deploy([], options);
-
-        await assert.isFulfilled(deployPromise, 'Could not deploy the Waellet Tip Smart Contract'); // Check it is deployed
+        await assert.isFulfilled(deployPromise, 'Could not deploy the Waellet Tip Smart Contract'); // Check whether it's deployed
     })
-
 })
