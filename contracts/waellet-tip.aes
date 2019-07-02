@@ -13,7 +13,8 @@ contract WaelletTip =
   record tip = { repaid: bool
                , sender: address
                , date_received: int
-               , amount: int }
+               , amount: int
+               , note: option(string) }
 
   record timeframe = { date_from: int
                      , date_to: int }
@@ -26,13 +27,13 @@ contract WaelletTip =
   public stateful function init() = 
     { websites = {} }
 
-  public stateful function tip(domain: string) =
+  public stateful function tip(domain: string, note: option(string)) =
     is_website_present(domain)
-    let tip : tip = {
-      repaid = false,
-      sender = Call.caller,
-      date_received = Chain.timestamp,
-      amount = Call.value }
+    let tip : tip = { repaid = false
+                    , sender = Call.caller
+                    , date_received = Chain.timestamp
+                    , amount = Call.value
+                    , note = note }
 
     put(state{ websites[domain].tips = tip :: state.websites[domain].tips })
     put(state{ websites[domain].balance = Call.value + state.websites[domain].balance })
