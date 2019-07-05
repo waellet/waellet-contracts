@@ -52,7 +52,7 @@ contract WaelletTip =
 
     let tips_for_payment_list = get_tips_for_payment_list(domain: string)
 
-    let withdraw_amount = get_withdraw_amount(tips_for_payment_list)
+    let withdraw_amount = get_withdraw_amount(tips_for_payment_list, domain: string)
 
     require(withdraw_amount > 0, "You dont have pending balance for withdrawal")
     
@@ -63,11 +63,27 @@ contract WaelletTip =
     Chain.spend(Call.caller, withdraw_amount)
     Chain.event(LogTipsWithdrawn(Call.caller, withdraw_amount))
 
-  private function get_withdraw_amount(tips_for_payment: list(tip)) : int =
+  private function get_withdraw_amount(tips_for_payment: list(tip), domain: string) : int =
     // filter the tips for the current timeframe ownership
+    let tips : list(tip) = current_ownership_tips(tips_for_payment, state.websites[domain].owner[Call.caller] : timeframe)
     // filter the repaid tips
+    let unpaid_tips : list(tip) = filter_unpaid_tips(tips)
     // return the possible withdraw amount
-    0 
+    possible_withdraw_amount(unpaid_tips) 
+
+  private function possible_withdraw_amount(tips: list(tip)) : int =
+    sum((single_tip) => (single_tip.amount), tips)
+
+  private function filter_unpaid_tips(tips: list(tip)) : list(tip) =
+    filter((single_tip) => (is_repaid(single_tip)), tips)
+
+  private function is_repaid(tip: tip) : bool =
+    tip.repaid
+
+  private function current_ownership_tips(tips: list(tip), time: timeframe) : list(tip) =
+    filter((single_tip) => (diff(single_tip, time)), tips)
+
+  private function diff(tip : tip, timeframe: timeframe) : bool = tip.date_received >= timeframe.date_from && tip.date_received =< timeframe.date_to
 
   private function get_tips_for_payment_list(domain: string) : list(tip) =
     // check if the call.caller is the domain owner
