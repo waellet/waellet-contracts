@@ -24,10 +24,9 @@ contract WaelletTip =
     | LogWebsiteVerified(indexed address, indexed int, string)
     | LogTipsWithdrawn(indexed address, indexed int)
 
-  public stateful function init() = 
-    { websites = {} }
+  stateful entrypoint init() = { websites = {} }
 
-  public stateful function tip(domain: string, note: option(string)) =
+  stateful entrypoint tip(domain: string, note: option(string)) =
     is_website_present(domain)
     let tip : tip = { repaid = false
                     , sender = Call.caller
@@ -39,14 +38,14 @@ contract WaelletTip =
     put(state{ websites[domain].balance = Call.value + state.websites[domain].balance })
     Chain.event(LogTipReceived(Call.caller, Call.value, domain))
 
-  public function balance(domain:string) : int =
+  entrypoint balance(domain:string) : int =
     state.websites[domain].balance
 
-  public stateful function claim(domain: string) : hash =
+  stateful entrypoint claim(domain: string) : hash =
     is_domain_expired(domain)
     challenge_generate(domain)
 
-  public stateful function withdraw(domain: string) =
+  stateful entrypoint withdraw(domain: string) =
     is_domain_owner(domain)
     is_enough_balance(domain)
 
@@ -62,6 +61,8 @@ contract WaelletTip =
     
     Chain.spend(Call.caller, withdraw_amount)
     Chain.event(LogTipsWithdrawn(Call.caller, withdraw_amount))
+
+  // PRIVATE FUNCTIONS AND MODIFIERS
 
   private function get_withdraw_amount(tips_for_payment: list(tip), domain: string) : int =
     // filter the tips for the current timeframe ownership
@@ -169,7 +170,7 @@ contract WaelletTip =
         else
           x :: l
 
-  function filter(f : ('a) => bool, l : list('a)) = filter'(f, l, [])
+  private function filter(f : ('a) => bool, l : list('a)) = filter'(f, l, [])
   private function filter'(f : ('a) => bool, l : list('a), acc : list('a)) =
     switch(l)
       [] => acc
@@ -180,6 +181,3 @@ contract WaelletTip =
           filter'(f, l', acc)
 
   private function is_greater_zero(x : int) : bool = x > 0
-
-  private function require(b : bool, err : string) =
-    if(!b) abort(err)
