@@ -25,7 +25,8 @@
   },
   "homepage": "https://github.com/waellet/waellet-contracts#readme",
   "dependencies": {
-    "@aeternity/aepp-sdk": "^3.0.0",
-    "forgae": "^1.3.2"
+    "@aeternity/aepp-sdk": "3.4.0",
+    "forgae-lib": "1.0.4",
+    "yarn": "1.15.2"
   }
 }

@@ -1,74 +1,103 @@
 contract WaelletTip =
-  record state = {
-    websites: map(string, website) }
 
-  record website = {
-    domain: string,
-    challenge: string,
-    date_expire: int,
-    owner: map(address, timeframe),
-    balance: int,
-    tips: list(tip) }
+  record state = { websites: map(string, website) }
 
-  record tip = {
-    repaid: bool,
-    sender: address,
-    date_received: int,
-    amount: int }
+  record website = { domain: string
+                   , challenge: hash
+                   , verified: bool
+                   , date_expire: int
+                   , owner: map(address, timeframe)
+                   , balance: int
+                   , tips: list(tip) }
 
-  record timeframe = {
-    date_from: int,
-    date_to: int }
+  record tip = { repaid: bool
+               , sender: address
+               , date_received: int
+               , amount: int
+               , note: option(string) }
 
-  public stateful function init() = 
-    { websites = {} }
+  record timeframe = { date_from: int
+                     , date_to: int }
 
-  public stateful function tip(domain: string) =
+  datatype event = 
+      LogTipReceived(indexed address, indexed int, string) 
+    | LogWebsiteVerified(indexed address, indexed int, string)
+    | LogTipsWithdrawn(indexed address, indexed int)
+
+  stateful entrypoint init() = { websites = {} }
+
+  stateful entrypoint tip(domain: string, note: option(string)) =
     is_website_present(domain)
-    let tip : tip = {
-      repaid = false,
-      sender = Call.caller,
-      date_received = Chain.timestamp,
-      amount = Call.value }
+    let tip : tip = { repaid = false
+                    , sender = Call.caller
+                    , date_received = Chain.timestamp
+                    , amount = Call.value
+                    , note = note }
 
-    put(state{websites[domain].tips = tip :: state.websites[domain].tips})
-    put(state{websites[domain].balance = Call.value + state.websites[domain].balance})
+    put(state{ websites[domain].tips = tip :: state.websites[domain].tips })
+    put(state{ websites[domain].balance = Call.value + state.websites[domain].balance })
+    Chain.event(LogTipReceived(Call.caller, Call.value, domain))
 
-  public function balance(domain:string) : int =
+  entrypoint balance(domain:string) : int =
     state.websites[domain].balance
 
-  public stateful function claim(domain: string) : string =
+  stateful entrypoint claim(domain: string) : hash =
     is_domain_expired(domain)
     challenge_generate(domain)
 
-  public stateful function withdraw(domain: string) =
+  stateful entrypoint withdraw(domain: string) =
     is_domain_owner(domain)
     is_enough_balance(domain)
-    let tips_for_payment_list = get_tips_for_payment_list(domain: string)
-    let withdraw_amount = get_withdraw_amount(tips_for_payment_list)
-    require(withdraw_amount > 0, "You dont have pending balance for withdrawal")
-    put(state{websites[domain].balance = state.websites[domain].balance - withdraw_amount})
-    require(set_tips_repaid(tips_for_payment_list), "Something went wrong with the tips")
-    Chain.spend(Call.caller, withdraw_amount)
 
-  private function get_withdraw_amount(tips_for_payment: list(tip)) : int =
+    let tips_for_payment_list = get_tips_for_payment_list(domain: string)
+
+    let withdraw_amount = get_withdraw_amount(tips_for_payment_list, domain: string)
+
+    require(withdraw_amount > 0, "You dont have pending balance for withdrawal")
+    
+    put(state{websites[domain].balance = state.websites[domain].balance - withdraw_amount})
+    
+    require(set_tips_repaid(tips_for_payment_list), "Something went wrong with the tips")
+    
+    Chain.spend(Call.caller, withdraw_amount)
+    Chain.event(LogTipsWithdrawn(Call.caller, withdraw_amount))
+
+  // PRIVATE FUNCTIONS AND MODIFIERS
+
+  private function get_withdraw_amount(tips_for_payment: list(tip), domain: string) : int =
     // filter the tips for the current timeframe ownership
+    let tips : list(tip) = current_ownership_tips(tips_for_payment, state.websites[domain].owner[Call.caller] : timeframe)
     // filter the repaid tips
+    let unpaid_tips : list(tip) = filter_unpaid_tips(tips)
     // return the possible withdraw amount
-    0 
+    possible_withdraw_amount(unpaid_tips) 
+
+  private function possible_withdraw_amount(tips: list(tip)) : int =
+    sum((single_tip) => (single_tip.amount), tips)
+
+  private function filter_unpaid_tips(tips: list(tip)) : list(tip) =
+    filter((single_tip) => (is_repaid(single_tip)), tips)
+
+  private function is_repaid(tip: tip) : bool =
+    tip.repaid
+
+  private function current_ownership_tips(tips: list(tip), time: timeframe) : list(tip) =
+    filter((single_tip) => (diff(single_tip, time)), tips)
+
+  private function diff(tip : tip, timeframe: timeframe) : bool = tip.date_received >= timeframe.date_from && tip.date_received =< timeframe.date_to
 
   private function get_tips_for_payment_list(domain: string) : list(tip) =
     // check if the call.caller is the domain owner
     // return all the tips for certain domain
     []
 
-  private stateful function set_tips_repaid(tips: list(tip)) : bool =
+  private function set_tips_repaid(tips: list(tip)) : bool =
     // iterate over all the tips in list and set the repaid property to true
     // this is to prevent reentrancy
     true
 
-  private stateful function challenge_generate(domain: string) : string =
-    let challenge =  Int.to_str(String.sha3(domain))
+  private stateful function challenge_generate(domain: string) : hash =
+    let challenge = String.sha3(domain)
     put(state{websites[domain].challenge = challenge})
     challenge
 
@@ -106,9 +135,10 @@ contract WaelletTip =
       let website : website = {
         domain = domain,
         challenge = challenge_generate(domain),
+        verified = false,
         date_expire = 0,
         owner = {},
-        balance = 0, 
+        balance = 0,
         tips = [] }
       put(state{websites[domain] = website})
 
@@ -140,7 +170,7 @@ contract WaelletTip =
         else
           x :: l
 
-  function filter(f : ('a) => bool, l : list('a)) = filter'(f, l, [])
+  private function filter(f : ('a) => bool, l : list('a)) = filter'(f, l, [])
   private function filter'(f : ('a) => bool, l : list('a), acc : list('a)) =
     switch(l)
       [] => acc
@@ -150,8 +180,4 @@ contract WaelletTip =
         else
           filter'(f, l', acc)
 
-
   private function is_greater_zero(x : int) : bool = x > 0
-
-  private function require(b : bool, err : string) =
-    if(!b) abort(err)
