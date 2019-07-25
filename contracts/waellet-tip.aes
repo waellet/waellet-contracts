@@ -24,7 +24,7 @@ contract WaelletTip =
     | LogWebsiteVerified(indexed address, indexed int, string)
     | LogTipsWithdrawn(indexed address, indexed int)
 
-  stateful entrypoint init() = { websites = {} }
+  entrypoint init() = { websites = {} }
 
   stateful entrypoint tip(domain: string, note: option(string)) =
     is_website_present(domain)
@@ -115,7 +115,7 @@ contract WaelletTip =
   private function is_enough_balance(domain: string) =
     require(state.websites[domain].balance > 0, "INSUFFICIENT_BALANCE")
 
-  public function all_domain_expire_dates(domain) : list(int) =
+  entrypoint all_domain_expire_dates(domain) : list(int) =
     let domain_expires_list = Map.to_list(state.websites[domain].owner)
     map(tuple_second, domain_expires_list)
 
