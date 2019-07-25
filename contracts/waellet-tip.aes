@@ -3,7 +3,7 @@ contract WaelletTip =
   record state = { websites: map(string, website) }
 
   record website = { domain: string
-                   , challenge: hash
+                   , challenge: string
                    , verified: bool
                    , date_expire: int
                    , owner: map(address, timeframe)
@@ -41,7 +41,7 @@ contract WaelletTip =
   entrypoint balance(domain:string) : int =
     state.websites[domain].balance
 
-  stateful entrypoint claim(domain: string) : hash =
+  stateful entrypoint claim(domain: string) : string =
     is_domain_expired(domain)
     challenge_generate(domain)
 
@@ -88,6 +88,7 @@ contract WaelletTip =
 
   private function get_tips_for_payment_list(domain: string) : list(tip) =
     // check if the call.caller is the domain owner
+    require(is_domain_owner(domain), "UNAUTHORIZED_ACCESS")
     // return all the tips for certain domain
     []
 
@@ -96,8 +97,8 @@ contract WaelletTip =
     // this is to prevent reentrancy
     true
 
-  private stateful function challenge_generate(domain: string) : hash =
-    let challenge = String.sha3(domain)
+  private stateful function challenge_generate(domain: string) : string =
+    let challenge = Bytes.to_str(Crypto.sha3(domain))
     put(state{websites[domain].challenge = challenge})
     challenge
 
@@ -109,10 +110,10 @@ contract WaelletTip =
     require(state.websites[domain].owner[Call.caller].date_to != 0
       && state.websites[domain].owner[Call.caller].date_from =< Chain.timestamp
       && state.websites[domain].owner[Call.caller].date_to >= Chain.timestamp
-      , "You are not the owner of this domain")
+      , "NOT_DOMAIN_OWNER")
 
   private function is_enough_balance(domain: string) =
-    require(state.websites[domain].balance > 0, "Not enough balance")
+    require(state.websites[domain].balance > 0, "INSUFFICIENT_BALANCE")
 
   public function all_domain_expire_dates(domain) : list(int) =
     let domain_expires_list = Map.to_list(state.websites[domain].owner)
