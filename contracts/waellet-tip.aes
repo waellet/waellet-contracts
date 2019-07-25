@@ -53,11 +53,11 @@ contract WaelletTip =
 
     let withdraw_amount = get_withdraw_amount(tips_for_payment_list, domain: string)
 
-    require(withdraw_amount > 0, "You dont have pending balance for withdrawal")
+    require(withdraw_amount > 0, "INSUFFICIENT_BALANCE")
     
     put(state{websites[domain].balance = state.websites[domain].balance - withdraw_amount})
     
-    require(set_tips_repaid(tips_for_payment_list), "Something went wrong with the tips")
+    require(set_tips_repaid(tips_for_payment_list), "ERROR_TIPS")
     
     Chain.spend(Call.caller, withdraw_amount)
     Chain.event(LogTipsWithdrawn(Call.caller, withdraw_amount))
