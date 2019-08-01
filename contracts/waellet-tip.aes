@@ -8,9 +8,11 @@ contract WaelletTip =
                    , date_expire: int
                    , owner: map(address, timeframe)
                    , balance: int
-                   , tips: list(tip) }
+                   , tips: map(int, tip)
+                   , tip_seq_id: int }
 
-  record tip = { repaid: bool
+  record tip = { seq_id: int
+               , repaid: bool
                , sender: address
                , date_received: int
                , amount: int
@@ -28,14 +30,16 @@ contract WaelletTip =
 
   stateful entrypoint tip(domain: string, note: option(string)) =
     is_website_present(domain)
-    let tip : tip = { repaid = false
+    let tip : tip = { seq_id = state.websites[domain].tip_seq_id
+                    , repaid = false
                     , sender = Call.caller
                     , date_received = Chain.timestamp
                     , amount = Call.value
                     , note = note }
 
-    put(state{ websites[domain].tips = tip :: state.websites[domain].tips })
-    put(state{ websites[domain].balance = Call.value + state.websites[domain].balance })
+    put(state{ websites[domain].tips[state.websites[domain].tip_seq_id] = tip })
+    put(state{ websites[domain].balance = Call.value + state.websites[domain].balance
+             , websites[domain].tip_seq_id = state.websites[domain].tip_seq_id + 1 })
     Chain.event(LogTipReceived(Call.caller, Call.value, domain))
 
   entrypoint balance(domain:string) : int =
@@ -48,17 +52,11 @@ contract WaelletTip =
   stateful entrypoint withdraw(domain: string) =
     is_domain_owner(domain)
     is_enough_balance(domain)
-
     let tips_for_payment_list = get_tips_for_payment_list(domain: string)
-
     let withdraw_amount = get_withdraw_amount(tips_for_payment_list, domain: string)
-
     require(withdraw_amount > 0, "INSUFFICIENT_BALANCE")
-    
     put(state{websites[domain].balance = state.websites[domain].balance - withdraw_amount})
-    
-    require(set_tips_repaid(tips_for_payment_list), "ERROR_TIPS")
-    
+    require(set_tips_repaid(tips_for_payment_list, domain), "ERROR_TIPS")
     Chain.spend(Call.caller, withdraw_amount)
     Chain.event(LogTipsWithdrawn(Call.caller, withdraw_amount))
 
@@ -66,17 +64,18 @@ contract WaelletTip =
 
   function get_withdraw_amount(tips_for_payment: list(tip), domain: string) : int =
     // filter the tips for the current timeframe ownership
-    let tips : list(tip) = current_ownership_tips(tips_for_payment, state.websites[domain].owner[Call.caller] : timeframe)
+    let tips = current_ownership_tips(tips_for_payment, state.websites[domain].owner[Call.caller] : timeframe)
     // filter the repaid tips
-    let unpaid_tips : list(tip) = filter_unpaid_tips(tips)
+    let unpaid_tips = filter_unpaid_tips(tips)
     // return the possible withdraw amount
     possible_withdraw_amount(unpaid_tips) 
 
   function possible_withdraw_amount(tips: list(tip)) : int =
     sum((single_tip) => (single_tip.amount), tips)
 
-  function filter_unpaid_tips(tips: list(tip)) : list(tip) =
-    filter((single_tip) => (is_repaid(single_tip)), tips)
+  function filter_unpaid_tips(tips: map(int, tip)) : list(tip) =
+    let tips_list = Map.to_list(tips)
+    filter((single_tip) => (is_repaid(single_tip)), tips_list)
 
   function is_repaid(tip: tip) : bool =
     tip.repaid
@@ -90,11 +89,16 @@ contract WaelletTip =
     // check if the call.caller is the domain owner
     require(is_domain_owner(domain), "UNAUTHORIZED_ACCESS")
     // return all the tips for certain domain
-    []
+    filter_unpaid_tips(state.websites[domain].tips)
 
-  function set_tips_repaid(tips: list(tip)) : bool =
+  stateful function set_tips_repaid(tips: list(tip), domain: string) : bool =
     // iterate over all the tips in list and set the repaid property to true
+    // map(set_tips_repaid'(tip, domain), tips)
     // this is to prevent reentrancy
+    true
+
+  stateful function set_tips_repaid'(tip: tip, domain: string) : bool =
+    // put(state{websites[domain].tips})
     true
 
   stateful function challenge_generate(domain: string) : string =
@@ -133,14 +137,14 @@ contract WaelletTip =
 
   stateful function is_website_present(domain: string) =
     if(!Map.member(domain, state.websites))
-      let website : website = {
-        domain = domain,
-        challenge = challenge_generate(domain),
-        verified = false,
-        date_expire = 0,
-        owner = {},
-        balance = 0,
-        tips = [] }
+      let website : website = { domain = domain
+                              , challenge = challenge_generate(domain)
+                              , verified = false
+                              , date_expire = 0
+                              , owner = {}
+                              , balance = 0
+                              , tips = {}
+                              , tip_seq_id = 0 }
       put(state{websites[domain] = website})
   
   // general helper functions //
