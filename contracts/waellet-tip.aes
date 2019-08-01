@@ -38,76 +38,85 @@ contract WaelletTip =
                     , note = note }
 
     put(state{ websites[domain].tips[state.websites[domain].tip_seq_id] = tip })
-    put(state{ websites[domain].balance = Call.value + state.websites[domain].balance
-             , websites[domain].tip_seq_id = state.websites[domain].tip_seq_id + 1 })
+    put(state{ websites[domain].balance = Call.value + state.websites[domain].balance })
+    put(state{ websites[domain].tip_seq_id = state.websites[domain].tip_seq_id + 1 })
     Chain.event(LogTipReceived(Call.caller, Call.value, domain))
 
   entrypoint balance(domain:string) : int =
     state.websites[domain].balance
 
+  entrypoint status(domain: string) : bool =
+    state.websites[domain].verified
+
   stateful entrypoint claim(domain: string) : string =
     is_domain_expired(domain)
     challenge_generate(domain)
 
+  stateful entrypoint verify(domain: string) : bool =
+    challenge_check(domain)
+
   stateful entrypoint withdraw(domain: string) =
     is_domain_owner(domain)
     is_enough_balance(domain)
-    let tips_for_payment_list = get_tips_for_payment_list(domain: string)
-    let withdraw_amount = get_withdraw_amount(tips_for_payment_list, domain: string)
+    // reentrancy protection
+    let tips_for_payment_list : list(int) = get_tips_for_payment_list(domain: string)
+    let withdraw_amount : int = get_withdraw_amount(tips_for_payment_list, domain: string)
     require(withdraw_amount > 0, "INSUFFICIENT_BALANCE")
     put(state{websites[domain].balance = state.websites[domain].balance - withdraw_amount})
-    require(set_tips_repaid(tips_for_payment_list, domain), "ERROR_TIPS")
+    require(set_tips_repaid(tips_for_payment_list, domain), "ERROR_TIPS_PAYMENT")
     Chain.spend(Call.caller, withdraw_amount)
     Chain.event(LogTipsWithdrawn(Call.caller, withdraw_amount))
 
   // PRIVATE FUNCTIONS AND MODIFIERS
 
-  function get_withdraw_amount(tips_for_payment: list(tip), domain: string) : int =
+  function get_tips_for_payment_list(domain: string) : list(int) =
+    // return all the tips for certain domain
+    filter_unpaid_tips(Map.to_list(state.websites[domain].tips), [])
+
+  function filter_unpaid_tips(tips: list((int, tip)), unpaid_tips_ids: list(int)) : list(int) =
+    switch(tips)
+      [] => unpaid_tips_ids
+      (tip_id, tip) :: l' =>
+        switch(tip.repaid)
+          false => tip.seq_id :: unpaid_tips_ids
+        filter_unpaid_tips(l', unpaid_tips_ids)
+
+  function ownership_timeframe_matches(tip : tip, domain: string) : bool =
+    diff(tip, state.websites[domain].owner[Call.caller] : timeframe)
+
+  function get_withdraw_amount(tips_for_payment: list(int), domain: string) : int =
     // filter the tips for the current timeframe ownership
-    let tips = current_ownership_tips(tips_for_payment, state.websites[domain].owner[Call.caller] : timeframe)
-    // filter the repaid tips
-    let unpaid_tips = filter_unpaid_tips(tips)
-    // return the possible withdraw amount
-    possible_withdraw_amount(unpaid_tips) 
+    possible_withdraw_amount(tips_for_payment, domain) 
 
-  function possible_withdraw_amount(tips: list(tip)) : int =
-    sum((single_tip) => (single_tip.amount), tips)
-
-  function filter_unpaid_tips(tips: map(int, tip)) : list(tip) =
-    let tips_list = Map.to_list(tips)
-    filter((single_tip) => (is_repaid(single_tip)), tips_list)
-
-  function is_repaid(tip: tip) : bool =
-    tip.repaid
-
-  function current_ownership_tips(tips: list(tip), time: timeframe) : list(tip) =
-    filter((single_tip) => (diff(single_tip, time)), tips)
+  function possible_withdraw_amount(tips: list(int), domain: string) : int =
+    sum((tip_id) => (state.websites[domain].tips[tip_id].amount), tips)
 
   function diff(tip : tip, timeframe: timeframe) : bool = tip.date_received >= timeframe.date_from && tip.date_received =< timeframe.date_to
 
-  function get_tips_for_payment_list(domain: string) : list(tip) =
-    // check if the call.caller is the domain owner
-    require(is_domain_owner(domain), "UNAUTHORIZED_ACCESS")
-    // return all the tips for certain domain
-    filter_unpaid_tips(state.websites[domain].tips)
-
-  stateful function set_tips_repaid(tips: list(tip), domain: string) : bool =
+  stateful function set_tips_repaid(tips: list(int), domain: string) : bool =
     // iterate over all the tips in list and set the repaid property to true
-    // map(set_tips_repaid'(tip, domain), tips)
-    // this is to prevent reentrancy
-    true
+    set_tips_repaid'(tips, domain)
 
-  stateful function set_tips_repaid'(tip: tip, domain: string) : bool =
-    // put(state{websites[domain].tips})
-    true
+  stateful function set_tips_repaid'(tips : list(int), domain: string) : bool =
+    switch(tips)
+      [] => true
+      e :: l' =>
+        put(state{ websites[domain].tips[e].repaid = true })
+        set_tips_repaid'(l', domain)
 
   stateful function challenge_generate(domain: string) : string =
     let challenge = Bytes.to_str(Crypto.sha3(domain))
     put(state{websites[domain].challenge = challenge})
     challenge
 
-  function challenge_check(domain: string) : bool =
+  stateful function challenge_check(domain: string) : bool =
     // Call oracle and verify challenge
+    // let oracle_response = query_oracle_here(domain)
+    // if(oracle_response == state.websites[domain].challenge)
+    // put(state{ websites[domain].verified = true })
+    
+    // Testing:
+    put(state{ websites[domain].verified = true })
     true
 
   function is_domain_owner(domain: string) =
