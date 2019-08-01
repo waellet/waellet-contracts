@@ -3,14 +3,16 @@ contract WaelletTip =
   record state = { websites: map(string, website) }
 
   record website = { domain: string
-                   , challenge: hash
+                   , challenge: string
                    , verified: bool
                    , date_expire: int
                    , owner: map(address, timeframe)
                    , balance: int
-                   , tips: list(tip) }
+                   , tips: map(int, tip)
+                   , tip_seq_id: int }
 
-  record tip = { repaid: bool
+  record tip = { seq_id: int
+               , repaid: bool
                , sender: address
                , date_received: int
                , amount: int
@@ -24,104 +26,127 @@ contract WaelletTip =
     | LogWebsiteVerified(indexed address, indexed int, string)
     | LogTipsWithdrawn(indexed address, indexed int)
 
-  stateful entrypoint init() = { websites = {} }
+  entrypoint init() = { websites = {} }
 
   stateful entrypoint tip(domain: string, note: option(string)) =
     is_website_present(domain)
-    let tip : tip = { repaid = false
+    let tip : tip = { seq_id = state.websites[domain].tip_seq_id
+                    , repaid = false
                     , sender = Call.caller
                     , date_received = Chain.timestamp
                     , amount = Call.value
                     , note = note }
 
-    put(state{ websites[domain].tips = tip :: state.websites[domain].tips })
+    put(state{ websites[domain].tips[state.websites[domain].tip_seq_id] = tip })
     put(state{ websites[domain].balance = Call.value + state.websites[domain].balance })
+    put(state{ websites[domain].tip_seq_id = state.websites[domain].tip_seq_id + 1 })
     Chain.event(LogTipReceived(Call.caller, Call.value, domain))
 
   entrypoint balance(domain:string) : int =
     state.websites[domain].balance
 
-  stateful entrypoint claim(domain: string) : hash =
+  entrypoint status(domain: string) : bool =
+    state.websites[domain].verified
+
+  stateful entrypoint claim(domain: string) : string =
     is_domain_expired(domain)
     challenge_generate(domain)
+
+  stateful entrypoint verify(domain: string) : bool =
+    challenge_check(domain)
 
   stateful entrypoint withdraw(domain: string) =
     is_domain_owner(domain)
     is_enough_balance(domain)
-
-    let tips_for_payment_list = get_tips_for_payment_list(domain: string)
-
-    let withdraw_amount = get_withdraw_amount(tips_for_payment_list, domain: string)
-
-    require(withdraw_amount > 0, "You dont have pending balance for withdrawal")
-    
+    // reentrancy protection
+    let tips_for_payment_list : list(int) = get_tips_for_payment_list(domain: string)
+    let withdraw_amount : int = get_withdraw_amount(tips_for_payment_list, domain: string)
+    require(withdraw_amount > 0, "INSUFFICIENT_BALANCE")
     put(state{websites[domain].balance = state.websites[domain].balance - withdraw_amount})
-    
-    require(set_tips_repaid(tips_for_payment_list), "Something went wrong with the tips")
-    
+    require(set_tips_repaid(tips_for_payment_list, domain), "ERROR_TIPS_PAYMENT")
     Chain.spend(Call.caller, withdraw_amount)
     Chain.event(LogTipsWithdrawn(Call.caller, withdraw_amount))
 
   // PRIVATE FUNCTIONS AND MODIFIERS
 
-  private function get_withdraw_amount(tips_for_payment: list(tip), domain: string) : int =
-    // filter the tips for the current timeframe ownership
-    let tips : list(tip) = current_ownership_tips(tips_for_payment, state.websites[domain].owner[Call.caller] : timeframe)
-    // filter the repaid tips
-    let unpaid_tips : list(tip) = filter_unpaid_tips(tips)
-    // return the possible withdraw amount
-    possible_withdraw_amount(unpaid_tips) 
-
-  private function possible_withdraw_amount(tips: list(tip)) : int =
-    sum((single_tip) => (single_tip.amount), tips)
-
-  private function filter_unpaid_tips(tips: list(tip)) : list(tip) =
-    filter((single_tip) => (is_repaid(single_tip)), tips)
-
-  private function is_repaid(tip: tip) : bool =
-    tip.repaid
-
-  private function current_ownership_tips(tips: list(tip), time: timeframe) : list(tip) =
-    filter((single_tip) => (diff(single_tip, time)), tips)
-
-  private function diff(tip : tip, timeframe: timeframe) : bool = tip.date_received >= timeframe.date_from && tip.date_received =< timeframe.date_to
-
-  private function get_tips_for_payment_list(domain: string) : list(tip) =
-    // check if the call.caller is the domain owner
+  function get_tips_for_payment_list(domain: string) : list(int) =
     // return all the tips for certain domain
-    []
+    filter_owner(filter_unpaid_tips(Map.to_list(state.websites[domain].tips), []), domain)
 
-  private function set_tips_repaid(tips: list(tip)) : bool =
+  function filter_unpaid_tips(tips: list((int, tip)), unpaid_tips_ids: list(int)) : list(int) =
+    switch(tips)
+      [] => unpaid_tips_ids
+      (id, tip) :: l' =>
+        switch(tip.repaid)
+          false => tip.seq_id :: unpaid_tips_ids
+        filter_unpaid_tips(l', unpaid_tips_ids)
+
+  function filter_owner(tips: list(int), domain: string) : list(int) =
+    filter_owner'(tips, domain, [])
+  
+  function filter_owner'(tips: list(int), domain: string, filtered: list(int)) : list(int) =
+    switch(tips)
+      [] => filtered
+      e :: l' =>
+        switch(ownership_timeframe_matches(state.websites[domain].tips[e], domain))
+          true => e :: filtered
+        filter_owner'(l', domain, filtered)
+           
+  function ownership_timeframe_matches(tip : tip, domain: string) : bool =
+    diff(tip, state.websites[domain].owner[Call.caller] : timeframe)
+
+  function get_withdraw_amount(tips_for_payment: list(int), domain: string) : int =
+    // filter the tips for the current timeframe ownership
+    possible_withdraw_amount(tips_for_payment, domain) 
+
+  function possible_withdraw_amount(tips: list(int), domain: string) : int =
+    sum((tip_id) => (state.websites[domain].tips[tip_id].amount), tips)
+
+  function diff(tip : tip, timeframe: timeframe) : bool = tip.date_received >= timeframe.date_from && tip.date_received =< timeframe.date_to
+
+  stateful function set_tips_repaid(tips: list(int), domain: string) : bool =
     // iterate over all the tips in list and set the repaid property to true
-    // this is to prevent reentrancy
-    true
+    set_tips_repaid'(tips, domain)
 
-  private stateful function challenge_generate(domain: string) : hash =
-    let challenge = String.sha3(domain)
+  stateful function set_tips_repaid'(tips : list(int), domain: string) : bool =
+    switch(tips)
+      [] => true
+      e :: l' =>
+        put(state{ websites[domain].tips[e].repaid = true })
+        set_tips_repaid'(l', domain)
+
+  stateful function challenge_generate(domain: string) : string =
+    let challenge = Bytes.to_str(Crypto.sha3(domain))
     put(state{websites[domain].challenge = challenge})
     challenge
 
-  private function challenge_check(domain: string) : bool =
+  stateful function challenge_check(domain: string) : bool =
     // Call oracle and verify challenge
+    // let oracle_response = query_oracle_here(domain)
+    // if(oracle_response == state.websites[domain].challenge)
+    // put(state{ websites[domain].verified = true })
+    
+    // Testing:
+    put(state{ websites[domain].verified = true })
     true
 
-  private function is_domain_owner(domain: string) =
+  function is_domain_owner(domain: string) =
     require(state.websites[domain].owner[Call.caller].date_to != 0
       && state.websites[domain].owner[Call.caller].date_from =< Chain.timestamp
       && state.websites[domain].owner[Call.caller].date_to >= Chain.timestamp
-      , "You are not the owner of this domain")
+      , "NOT_DOMAIN_OWNER")
 
-  private function is_enough_balance(domain: string) =
-    require(state.websites[domain].balance > 0, "Not enough balance")
+  function is_enough_balance(domain: string) =
+    require(state.websites[domain].balance > 0, "INSUFFICIENT_BALANCE")
 
-  public function all_domain_expire_dates(domain) : list(int) =
+  entrypoint all_domain_expire_dates(domain) : list(int) =
     let domain_expires_list = Map.to_list(state.websites[domain].owner)
     map(tuple_second, domain_expires_list)
 
-  private function is_domain_expired(domain: string) : bool =
+  function is_domain_expired(domain: string) : bool =
     is_domain_expired'(all_domain_expire_dates(domain))
 
-  private function is_domain_expired'(domain_expires_list: list(int)) : bool =
+  function is_domain_expired'(domain_expires_list: list(int)) : bool =
     switch(domain_expires_list)
       [] => true
       e :: l' =>
@@ -130,38 +155,38 @@ contract WaelletTip =
         else
           is_domain_expired'(l')
 
-  private stateful function is_website_present(domain: string) =
+  stateful function is_website_present(domain: string) =
     if(!Map.member(domain, state.websites))
-      let website : website = {
-        domain = domain,
-        challenge = challenge_generate(domain),
-        verified = false,
-        date_expire = 0,
-        owner = {},
-        balance = 0,
-        tips = [] }
+      let website : website = { domain = domain
+                              , challenge = challenge_generate(domain)
+                              , verified = false
+                              , date_expire = 0
+                              , owner = {}
+                              , balance = 0
+                              , tips = {}
+                              , tip_seq_id = 0 }
       put(state{websites[domain] = website})
+  
+  // general helper functions //
 
-  private function tuple_second(tuple) =
+  function tuple_second(tuple) =
     switch(tuple)
       (_, e) => e.date_to
 
-  // general helper functions //
-
-  private function sum(f : 'a => int, l : list('a)) : int =
+  function sum(f : 'a => int, l : list('a)) : int =
     foldr((x, y) => x + y, 0, map(f, l))
 
-  private function map(f : 'a => 'b, l : list('a)) : list('b) =
+  function map(f : 'a => 'b, l : list('a)) : list('b) =
     switch(l)
      [] => []
      e :: l' => f(e) :: map(f, l')
 
-  private function foldr(f : (('a, 'b) => 'b), z: 'b, l : list('a)) : 'b =
+  function foldr(f : (('a, 'b) => 'b), z: 'b, l : list('a)) : 'b =
     switch(l)
       [] => z
       e :: l' => f(e, foldr(f, z, l'))
 
-  private function insert_by(f: (('a, 'a) => bool), x : 'a, l : list('a)) : list('a) =
+  function insert_by(f: (('a, 'a) => bool), x : 'a, l : list('a)) : list('a) =
     switch(l)
       [] => [x]
       (e :: l') =>
@@ -170,8 +195,8 @@ contract WaelletTip =
         else
           x :: l
 
-  private function filter(f : ('a) => bool, l : list('a)) = filter'(f, l, [])
-  private function filter'(f : ('a) => bool, l : list('a), acc : list('a)) =
+  function filter(f : ('a) => bool, l : list('a)) = filter'(f, l, [])
+  function filter'(f : ('a) => bool, l : list('a), acc : list('a)) =
     switch(l)
       [] => acc
       e :: l' =>
@@ -180,4 +205,4 @@ contract WaelletTip =
         else
           filter'(f, l', acc)
 
-  private function is_greater_zero(x : int) : bool = x > 0
+  function is_greater_zero(x : int) : bool = x > 0
