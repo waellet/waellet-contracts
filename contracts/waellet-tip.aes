@@ -71,16 +71,27 @@ contract WaelletTip =
 
   function get_tips_for_payment_list(domain: string) : list(int) =
     // return all the tips for certain domain
-    filter_unpaid_tips(Map.to_list(state.websites[domain].tips), [])
+    filter_owner(filter_unpaid_tips(Map.to_list(state.websites[domain].tips), []), domain)
 
   function filter_unpaid_tips(tips: list((int, tip)), unpaid_tips_ids: list(int)) : list(int) =
     switch(tips)
       [] => unpaid_tips_ids
-      (tip_id, tip) :: l' =>
+      (id, tip) :: l' =>
         switch(tip.repaid)
           false => tip.seq_id :: unpaid_tips_ids
         filter_unpaid_tips(l', unpaid_tips_ids)
 
+  function filter_owner(tips: list(int), domain: string) : list(int) =
+    filter_owner'(tips, domain, [])
+  
+  function filter_owner'(tips: list(int), domain: string, filtered: list(int)) : list(int) =
+    switch(tips)
+      [] => filtered
+      e :: l' =>
+        switch(ownership_timeframe_matches(state.websites[domain].tips[e], domain))
+          true => e :: filtered
+        filter_owner'(l', domain, filtered)
+           
   function ownership_timeframe_matches(tip : tip, domain: string) : bool =
     diff(tip, state.websites[domain].owner[Call.caller] : timeframe)
 
