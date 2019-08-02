@@ -23,9 +23,10 @@ contract WaelletTip =
 
   datatype event = 
       LogTipReceived(indexed address, indexed int, string) 
+    | LogWebsiteAdded(indexed address, indexed int, string)
     | LogWebsiteVerified(indexed address, indexed int, string)
     | LogWebsiteChallengeGenerated(indexed address, indexed int, string)
-    | LogTipsWithdrawn(indexed address, indexed int)
+    | LogTipsWithdrawn(indexed address, indexed int, indexed int)
 
   entrypoint init() = { websites = {} }
 
@@ -66,7 +67,7 @@ contract WaelletTip =
     put(state{websites[domain].balance = state.websites[domain].balance - withdraw_amount})
     require(set_tips_repaid(tips_for_payment_list, domain), "ERROR_TIPS_PAYMENT")
     Chain.spend(Call.caller, withdraw_amount)
-    Chain.event(LogTipsWithdrawn(Call.caller, withdraw_amount))
+    Chain.event(LogTipsWithdrawn(Call.caller, Chain.timestamp, withdraw_amount))
 
   // PRIVATE FUNCTIONS AND MODIFIERS
 
@@ -172,6 +173,7 @@ contract WaelletTip =
                               , tips = {}
                               , tip_seq_id = 0 }
       put(state{ websites[domain] = website })
+      Chain.event(LogWebsiteAdded(Call.caller, Chain.timestamp, domain))
   
   // general helper functions //
 
