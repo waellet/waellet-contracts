@@ -18,7 +18,8 @@
 const Ae = require('@aeternity/aepp-sdk').Universal;
 const Crypto = require('@aeternity/aepp-sdk').Crypto;
 const Bytes = require('@aeternity/aepp-sdk/es/utils/bytes');
-var blake2b = require('blake2b');
+const blake2b = require('blake2b');
+const { SHA3, Keccak } = require('sha3');
 
 const config = {
     host: 'http://localhost:3001/',
@@ -78,8 +79,9 @@ describe('Waellet Tip Contract', () => {
         const deploy = await deployTestContract.deploy([]);
         assert.equal(deploy.result.returnType, 'ok');
 
-        const claim = await deployTestContract.methods.claim('hack.bg').catch(e => e);
-        console.log(claim);
-
+        const domain = 'hack.bg';
+        const challengeExpected = hashTopic(domain);
+        const claim = await deployTestContract.methods.claim(domain).catch(e => e);
+        assert.equal(claim.decodedResult, challengeExpected.toUpperCase());
     });
 })
