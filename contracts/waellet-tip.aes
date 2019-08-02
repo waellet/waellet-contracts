@@ -117,7 +117,8 @@ contract WaelletTip =
 
   stateful function challenge_generate(domain: string) : string =
     let challenge = Bytes.to_str(Crypto.sha3(domain))
-    put(state{websites[domain].challenge = challenge})
+    is_website_present(domain)
+    put(state{ websites[domain].challenge = challenge })
     challenge
 
   stateful function challenge_check(domain: string) : bool =
@@ -160,14 +161,14 @@ contract WaelletTip =
   stateful function is_website_present(domain: string) =
     if(!Map.member(domain, state.websites))
       let website : website = { domain = domain
-                              , challenge = challenge_generate(domain)
+                              , challenge = ""
                               , verified = false
                               , date_expire = 0
                               , owner = {}
                               , balance = 0
                               , tips = {}
                               , tip_seq_id = 0 }
-      put(state{websites[domain] = website})
+      put(state{ websites[domain] = website })
   
   // general helper functions //
 
