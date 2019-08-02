@@ -84,4 +84,20 @@ describe('Waellet Tip Contract', () => {
         const claim = await deployTestContract.methods.claim(domain).catch(e => e);
         assert.equal(claim.decodedResult, challengeExpected.toUpperCase());
     });
+
+    it('Should Verify domain ownership', async () => {
+        let contractSource = utils.readFileRelative(WAELLET_CONTRACT_PATH, 'utf-8');
+        let deployTestContract = await owner.getContractInstance(contractSource);
+
+        const deploy = await deployTestContract.deploy([]);
+        assert.equal(deploy.result.returnType, 'ok');
+
+        const domain = 'hack.bg';
+        const challengeExpected = hashTopic(domain);
+        const claim = await deployTestContract.methods.claim(domain).catch(e => e);
+        assert.equal(claim.decodedResult, challengeExpected.toUpperCase());
+
+        const verify = await deployTestContract.methods.verify(domain).catch(e => e);
+        assert.equal(verify.decodedResult, true);
+    });
 })
