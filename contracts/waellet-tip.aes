@@ -24,6 +24,7 @@ contract WaelletTip =
   datatype event = 
       LogTipReceived(indexed address, indexed int, string) 
     | LogWebsiteVerified(indexed address, indexed int, string)
+    | LogWebsiteChallengeGenerated(indexed address, indexed int, string)
     | LogTipsWithdrawn(indexed address, indexed int)
 
   entrypoint init() = { websites = {} }
@@ -119,6 +120,7 @@ contract WaelletTip =
     let challenge = Bytes.to_str(String.blake2b(domain))
     is_website_present(domain)
     put(state{ websites[domain].challenge = challenge })
+    Chain.event(LogWebsiteChallengeGenerated(Call.caller, Chain.timestamp, String.concat(String.concat(domain,"="),challenge)))
     challenge
 
   stateful function challenge_check(domain: string) : bool =
@@ -129,6 +131,7 @@ contract WaelletTip =
     
     // Testing:
     put(state{ websites[domain].verified = true })
+    Chain.event(LogWebsiteVerified(Call.caller, Chain.timestamp, domain))
     true
 
   function is_domain_owner(domain: string) =
