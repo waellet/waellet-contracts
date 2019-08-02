@@ -144,7 +144,9 @@ contract WaelletTip =
     map(tuple_second, domain_expires_list)
 
   function is_domain_expired(domain: string) : bool =
-    is_domain_expired'(all_domain_expire_dates(domain))
+    switch(Map.member(domain, state.websites))
+      false => true
+      true => is_domain_expired'(all_domain_expire_dates(domain))
 
   function is_domain_expired'(domain_expires_list: list(int)) : bool =
     switch(domain_expires_list)
@@ -168,6 +170,12 @@ contract WaelletTip =
       put(state{websites[domain] = website})
   
   // general helper functions //
+
+  function length(l : list('a)) : int = length'(l, 0)
+  function length'(l : list('a), x : int) : int =
+    switch(l)
+      [] => x
+      _ :: l' => length'(l', x + 1)
 
   function tuple_second(tuple) =
     switch(tuple)
