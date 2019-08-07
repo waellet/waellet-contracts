@@ -19,7 +19,6 @@ const Ae = require('@aeternity/aepp-sdk').Universal;
 const Crypto = require('@aeternity/aepp-sdk').Crypto;
 const Bytes = require('@aeternity/aepp-sdk/es/utils/bytes');
 const blake2b = require('blake2b');
-const { SHA3, Keccak } = require('sha3');
 
 const config = {
     host: 'http://localhost:3001/',
@@ -99,5 +98,34 @@ describe('Waellet Tip Contract', () => {
 
         const verify = await deployTestContract.methods.verify(domain).catch(e => e);
         assert.equal(verify.decodedResult, true);
+    });
+
+    it('Should Tip known domain', async () => {
+        let contractSource = utils.readFileRelative(WAELLET_CONTRACT_PATH, 'utf-8');
+        let deployTestContract = await owner.getContractInstance(contractSource);
+
+        const deploy = await deployTestContract.deploy([]);
+        assert.equal(deploy.result.returnType, 'ok');
+
+        const domain = 'hack.bg';
+        const challengeExpected = hashTopic(domain);
+        const claim = await deployTestContract.methods.claim(domain).catch(e => e);
+        assert.equal(claim.decodedResult, challengeExpected.toUpperCase());
+
+        const tip = await deployTestContract.methods.tip(domain).catch(e => e);
+        assert.equal(tip.decodedResult, true);
+    });
+
+    it('Should Tip unknown domain', async () => {
+        let contractSource = utils.readFileRelative(WAELLET_CONTRACT_PATH, 'utf-8');
+        let deployTestContract = await owner.getContractInstance(contractSource);
+
+        const deploy = await deployTestContract.deploy([]);
+        assert.equal(deploy.result.returnType, 'ok');
+
+        const domain = 'hack.bg';
+
+        const tip = await deployTestContract.methods.tip(domain).catch(e => e);
+        assert.equal(tip.decodedResult, true);
     });
 })
