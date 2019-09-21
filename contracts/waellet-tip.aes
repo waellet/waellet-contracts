@@ -1,7 +1,8 @@
 contract WaelletTip =
 
   record state = 
-    { websites: map(string, website) }
+    { websites: map(string, website)
+    , tip_seq_id: int }
 
   record website = 
     { domain: string
@@ -10,8 +11,7 @@ contract WaelletTip =
     , date_expire: int
     , owner: map(address, timeframe)
     , balance: int
-    , tips: map(int, tip)
-    , tip_seq_id: int }
+    , tips: map(int, tip) }
 
   record tip = 
     { seq_id: int
@@ -32,20 +32,20 @@ contract WaelletTip =
     | LogWebsiteChallengeGenerated(indexed address, indexed int, string)
     | LogTipsWithdrawn(indexed address, indexed int, indexed int)
 
-  entrypoint init() = { websites = {} }
+  entrypoint init() = { websites = {}, tip_seq_id = 0 }
 
   stateful entrypoint tip(domain: string, note: option(string)) =
     is_website_present(domain)
-    let tip : tip = { seq_id = state.websites[domain].tip_seq_id
+    let tip : tip = { seq_id = state.tip_seq_id
                     , repaid = false
                     , sender = Call.caller
                     , date_received = Chain.timestamp
                     , amount = Call.value
                     , note = note }
 
-    put(state{ websites[domain].tips[state.websites[domain].tip_seq_id] = tip })
+    put(state{ websites[domain].tips[state.tip_seq_id] = tip })
     put(state{ websites[domain].balance @ b = b + Call.value })
-    put(state{ websites[domain].tip_seq_id @ c = c + 1 })
+    put(state{ tip_seq_id = state.tip_seq_id + 1 })
     Chain.event(LogTipReceived(Call.caller, Call.value, domain))
 
   entrypoint balance(domain:string) : int =
@@ -174,8 +174,7 @@ contract WaelletTip =
                               , date_expire = 0
                               , owner = {}
                               , balance = 0
-                              , tips = {}
-                              , tip_seq_id = 0 }
+                              , tips = {} }
       put(state{ websites[domain] = website })
       Chain.event(LogWebsiteAdded(Call.caller, Chain.timestamp, domain))
   
