@@ -31,7 +31,7 @@ const Deployer = require('forgae-lib').Deployer;
 const WAELLET_CONTRACT_PATH = "./contracts/waellet-tip.aes";
 
 describe('Waellet Tip Contract', () => {
-
+    
     let ownerKeypair, otherKeypair, owner, otherClient, contract;
 
     before(async () => {
