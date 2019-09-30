@@ -48,11 +48,15 @@ contract WaelletTip =
     put(state{ tip_seq_id = state.tip_seq_id + 1 })
     Chain.event(LogTipReceived(Call.caller, Call.value, domain))
 
-  entrypoint balance(domain:string) : int =
-    state.websites[domain].balance
+  entrypoint balance(domain:string) : option(int) =
+    switch(Map.lookup(domain, state.websites))
+      None => Some(0)
+      Some(x) => Some(state.websites[domain].balance)
 
-  entrypoint status(domain: string) : bool =
-    state.websites[domain].verified
+  entrypoint status(domain: string) : option(bool) =
+    switch(Map.lookup(domain, state.websites))
+      None => Some(false)
+      Some(x) => Some(state.websites[domain].verified)
 
   stateful entrypoint claim(domain: string) : string =
     is_domain_expired(domain)
@@ -64,7 +68,6 @@ contract WaelletTip =
   stateful entrypoint withdraw(domain: string) =
     is_domain_owner(domain)
     is_enough_balance(domain)
-    // reentrancy protection
     let tips_for_payment_list : list(int) = get_tips_for_payment_list(domain: string)
     let withdraw_amount : int = get_withdraw_amount(tips_for_payment_list, domain: string)
     require(withdraw_amount > 0, "INSUFFICIENT_BALANCE")
