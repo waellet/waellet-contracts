@@ -6,7 +6,7 @@ contract WaelletTip =
 
   record website = 
     { domain: string
-    , challenge: string
+    , challenge: option(string)
     , verified: bool
     , date_expire: int
     , owner: map(address, timeframe)
@@ -127,7 +127,7 @@ contract WaelletTip =
   stateful function challenge_generate(domain: string) : string =
     let challenge = Bytes.to_str(String.blake2b(domain))
     is_website_present(domain)
-    put(state{ websites[domain].challenge = challenge })
+    put(state{ websites[domain].challenge = Some(challenge) })
     Chain.event(LogWebsiteChallengeGenerated(Call.caller, Chain.timestamp, String.concat(String.concat(domain,"="),challenge)))
     challenge
 
@@ -172,7 +172,7 @@ contract WaelletTip =
   stateful function is_website_present(domain: string) =
     if(!Map.member(domain, state.websites))
       let website : website = { domain = domain
-                              , challenge = ""
+                              , challenge = None
                               , verified = false
                               , date_expire = 0
                               , owner = {}
