@@ -1,0 +1,21 @@
+contract Token =
+  record meta_info =
+    { name : string
+    , symbol : string
+    , decimals : int }
+    
+  entrypoint meta_info : () => meta_info
+  entrypoint total_supply : () => int
+  entrypoint owner : () => address
+  entrypoint balances : () => map(address, int)
+  entrypoint balance : (address) => option(int)
+  entrypoint transfer : (address, int) => ()
+
+contract TokenRegistry =
+  record state = { tokens: map(Token, Token.meta_info) }
+  stateful entrypoint init() = { tokens = {} }
+    
+  entrypoint getAllTokens() : map(Token, Token.meta_info) = state.tokens
+    
+  stateful entrypoint addToken(token : Token) : () =
+    put(state{ tokens[token] = token.meta_info() })
