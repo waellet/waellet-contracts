@@ -13,6 +13,7 @@ contract Token =
 
 contract TokenRegistry =
   record state = { tokens: map(Token, Token.meta_info) }
+ 
   stateful entrypoint init() = { tokens = {} }
     
   entrypoint getAllTokens() : map(Token, Token.meta_info) = state.tokens
