@@ -15,14 +15,14 @@ contract TokenRegistry =
   record state = { tokens: map(Token, Token.meta_info) }
  
   stateful entrypoint init() = { tokens = {} }
-    
-  entrypoint getAllTokens() : map(Token, Token.meta_info) = state.tokens
-    
-  stateful entrypoint addToken(token : Token) : () =
+  
+  stateful entrypoint add_token(token : Token) : () =
     put(state{ tokens[token] = token.meta_info() })
 
-  entrypoint getTokenMetaInfo(token : Token) : Token.meta_info = token.meta_info()
-  entrypoint getTokenBalances(token : Token) : map(address, int) = token.balances()
-  entrypoint getTokenBalance(token : Token, account: address) : option(int) = token.balance(account)
-  entrypoint getTokenOwner(token : Token) : address = token.owner()
-  entrypoint getTokenTotalSupply(token : Token) : int = token.total_supply()
+  entrypoint get_all_tokens() : map(Token, Token.meta_info) = state.tokens
+
+  entrypoint get_token_meta_info(token : Token) : Token.meta_info = token.meta_info()
+  entrypoint get_token_balances(token : Token) : map(address, int) = token.balances()
+  entrypoint get_token_balance(token : Token, account: address) : option(int) = token.balance(account)
+  entrypoint get_token_owner(token : Token) : address = token.owner()
+  entrypoint get_token_total_supply(token : Token) : int = token.total_supply()
