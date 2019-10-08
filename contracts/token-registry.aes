@@ -19,3 +19,9 @@ contract TokenRegistry =
     
   stateful entrypoint addToken(token : Token) : () =
     put(state{ tokens[token] = token.meta_info() })
+
+  entrypoint getTokenMetaInfo(token : Token) : Token.meta_info = token.meta_info()
+  entrypoint getTokenBalances(token : Token) : map(address, int) = token.balances()
+  entrypoint getTokenBalance(token : Token, account: address) : option(int) = token.balance(account)
+  entrypoint getTokenOwner(token : Token) : address = token.owner()
+  entrypoint getTokenTotalSupply(token : Token) : int = token.total_supply()
