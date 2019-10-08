@@ -1,25 +1,29 @@
 contract WaelletTip =
 
-  record state = { websites: map(string, website) }
+  record state = 
+    { websites: map(string, website)
+    , tip_seq_id: int }
 
-  record website = { domain: string
-                   , challenge: string
-                   , verified: bool
-                   , date_expire: int
-                   , owner: map(address, timeframe)
-                   , balance: int
-                   , tips: map(int, tip)
-                   , tip_seq_id: int }
+  record website = 
+    { domain: string
+    , challenge: option(string)
+    , verified: bool
+    , date_expire: int
+    , owner: map(address, timeframe)
+    , balance: int
+    , tips: map(int, tip) }
 
-  record tip = { seq_id: int
-               , repaid: bool
-               , sender: address
-               , date_received: int
-               , amount: int
-               , note: option(string) }
+  record tip = 
+    { seq_id: int
+    , repaid: bool
+    , sender: address
+    , date_received: int
+    , amount: int
+    , note: option(string) }
 
-  record timeframe = { date_from: int
-                     , date_to: int }
+  record timeframe = 
+    { date_from: int
+    , date_to: int }
 
   datatype event = 
       LogTipReceived(indexed address, indexed int, string) 
@@ -28,27 +32,31 @@ contract WaelletTip =
     | LogWebsiteChallengeGenerated(indexed address, indexed int, string)
     | LogTipsWithdrawn(indexed address, indexed int, indexed int)
 
-  entrypoint init() = { websites = {} }
+  entrypoint init() = { websites = {}, tip_seq_id = 0 }
 
   stateful entrypoint tip(domain: string, note: option(string)) =
     is_website_present(domain)
-    let tip : tip = { seq_id = state.websites[domain].tip_seq_id
+    let tip : tip = { seq_id = state.tip_seq_id
                     , repaid = false
                     , sender = Call.caller
                     , date_received = Chain.timestamp
                     , amount = Call.value
                     , note = note }
 
-    put(state{ websites[domain].tips[state.websites[domain].tip_seq_id] = tip })
+    put(state{ websites[domain].tips[state.tip_seq_id] = tip })
     put(state{ websites[domain].balance @ b = b + Call.value })
-    put(state{ websites[domain].tip_seq_id @ c = c + 1 })
+    put(state{ tip_seq_id = state.tip_seq_id + 1 })
     Chain.event(LogTipReceived(Call.caller, Call.value, domain))
 
-  entrypoint balance(domain:string) : int =
-    state.websites[domain].balance
+  entrypoint balance(domain:string) : option(int) =
+    switch(Map.lookup(domain, state.websites))
+      None => Some(0)
+      Some(x) => Some(state.websites[domain].balance)
 
-  entrypoint status(domain: string) : bool =
-    state.websites[domain].verified
+  entrypoint status(domain: string) : option(bool) =
+    switch(Map.lookup(domain, state.websites))
+      None => Some(false)
+      Some(x) => Some(state.websites[domain].verified)
 
   stateful entrypoint claim(domain: string) : string =
     is_domain_expired(domain)
@@ -60,7 +68,6 @@ contract WaelletTip =
   stateful entrypoint withdraw(domain: string) =
     is_domain_owner(domain)
     is_enough_balance(domain)
-    // reentrancy protection
     let tips_for_payment_list : list(int) = get_tips_for_payment_list(domain: string)
     let withdraw_amount : int = get_withdraw_amount(tips_for_payment_list, domain: string)
     require(withdraw_amount > 0, "INSUFFICIENT_BALANCE")
@@ -120,7 +127,7 @@ contract WaelletTip =
   stateful function challenge_generate(domain: string) : string =
     let challenge = Bytes.to_str(String.blake2b(domain))
     is_website_present(domain)
-    put(state{ websites[domain].challenge = challenge })
+    put(state{ websites[domain].challenge = Some(challenge) })
     Chain.event(LogWebsiteChallengeGenerated(Call.caller, Chain.timestamp, String.concat(String.concat(domain,"="),challenge)))
     challenge
 
@@ -165,13 +172,12 @@ contract WaelletTip =
   stateful function is_website_present(domain: string) =
     if(!Map.member(domain, state.websites))
       let website : website = { domain = domain
-                              , challenge = ""
+                              , challenge = None
                               , verified = false
                               , date_expire = 0
                               , owner = {}
                               , balance = 0
-                              , tips = {}
-                              , tip_seq_id = 0 }
+                              , tips = {} }
       put(state{ websites[domain] = website })
       Chain.event(LogWebsiteAdded(Call.caller, Chain.timestamp, domain))
   
