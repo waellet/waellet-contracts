@@ -125,7 +125,7 @@ contract WaelletTip =
         set_tips_repaid'(l', domain)
 
   stateful function challenge_generate(domain: string) : string =
-    let challenge = Bytes.to_str(String.blake2b(domain))
+    let challenge = Bytes.to_str(String.blake2b(String.concat(Address.to_str(Call.caller), domain)))
     is_website_present(domain)
     put(state{ websites[domain].challenge = Some(challenge) })
     Chain.event(LogWebsiteChallengeGenerated(Call.caller, Chain.timestamp, String.concat(String.concat(domain,"="),challenge)))
