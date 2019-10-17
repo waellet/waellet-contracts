@@ -82,7 +82,7 @@ contract WaelletTip =
     // return all the tips for certain domain
     filter_owner(filter_unpaid_tips(Map.to_list(state.websites[domain].tips), []), domain)
 
-  function filter_unpaid_tips(tips: list((int, tip)), unpaid_tips_ids: list(int)) : list(int) =
+  function filter_unpaid_tips(tips: list((int * tip)), unpaid_tips_ids: list(int)) : list(int) =
     switch(tips)
       [] => unpaid_tips_ids
       (id, tip) :: l' =>
