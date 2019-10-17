@@ -128,8 +128,18 @@ contract WaelletTip =
     let challenge = Bytes.to_str(String.blake2b(String.concat(Address.to_str(Call.caller), domain)))
     is_website_present(domain)
     put(state{ websites[domain].challenge = Some(challenge) })
-    Chain.event(LogWebsiteChallengeGenerated(Call.caller, Chain.timestamp, String.concat(String.concat("waellet-tip-verification","="),challenge)))
-    challenge
+    let challenge_memory = String.concat("waellet-tip-verification=",challenge)
+    Chain.event(LogWebsiteChallengeGenerated(Call.caller, Chain.timestamp, challenge_memory))
+    challenge_memory
+
+  stateful entrypoint get_answer(question: string) : bool =
+    let oracle_query : oracle_query(string, string) =
+      Oracle.query( ok_2EaKARLitjLUsYxvL8tFhhUD3Z9EiBieD6yBAaGztJNcjKogXU : oracle(string, string)
+                  , question
+                  , 30000
+                  , RelativeTTL(10)
+                  , FixedTTL(10) )
+    true
 
   stateful function challenge_check(domain: string) : bool =
     // Call oracle and verify challenge
