@@ -128,7 +128,7 @@ contract WaelletTip =
     let challenge = Bytes.to_str(String.blake2b(String.concat(Address.to_str(Call.caller), domain)))
     is_website_present(domain)
     put(state{ websites[domain].challenge = Some(challenge) })
-    Chain.event(LogWebsiteChallengeGenerated(Call.caller, Chain.timestamp, String.concat(String.concat(domain,"="),challenge)))
+    Chain.event(LogWebsiteChallengeGenerated(Call.caller, Chain.timestamp, String.concat(String.concat("waellet-tip-verification","="),challenge)))
     challenge
 
   stateful function challenge_check(domain: string) : bool =
