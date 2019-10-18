@@ -9,17 +9,17 @@ contract Token =
   entrypoint owner : () => address
   entrypoint balances : () => map(address, int)
   entrypoint balance : (address) => option(int)
-  entrypoint transfer : (address, int) => ()
+  entrypoint transfer : (address, int) => unit
 
 contract TokenRegistry =
-  record state = { tokens: map(Token, Token.meta_info) }
+  type state = map(Token, Token.meta_info)
  
-  stateful entrypoint init() = { tokens = {} }
+  stateful entrypoint init() : state = {}
   
-  stateful entrypoint add_token(token : Token) : () =
-    put(state{ tokens[token] = token.meta_info() })
+  stateful entrypoint add_token(token : Token) : unit =
+    put(state{ [token] = token.meta_info() })
 
-  entrypoint get_all_tokens() : map(Token, Token.meta_info) = state.tokens
+  entrypoint get_all_tokens() : map(Token, Token.meta_info) = state
 
   entrypoint get_token_meta_info(token : Token) : Token.meta_info = token.meta_info()
   entrypoint get_token_balances(token : Token) : map(address, int) = token.balances()
