@@ -16,7 +16,7 @@ contract TokenRegistry =
  
   stateful entrypoint init() : state = {}
   
-  stateful entrypoint add_token(token : Token) : () =
+  stateful entrypoint add_token(token : Token) : unit =
     put(state{ [token] = token.meta_info() })
 
   entrypoint get_all_tokens() : map(Token, Token.meta_info) = state

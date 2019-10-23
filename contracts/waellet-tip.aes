@@ -32,9 +32,9 @@ contract WaelletTip =
     | LogWebsiteChallengeGenerated(indexed address, indexed int, string)
     | LogTipsWithdrawn(indexed address, indexed int, indexed int)
 
-  entrypoint init() = { websites = {}, tip_seq_id = 0 }
+  entrypoint init() : state = { websites = {}, tip_seq_id = 0 }
 
-  stateful entrypoint tip(domain: string, note: option(string)) =
+  stateful entrypoint tip(domain: string, note: option(string)) : unit =
     is_website_present(domain)
     let tip : tip = { seq_id = state.tip_seq_id
                     , repaid = false
@@ -65,7 +65,7 @@ contract WaelletTip =
   stateful entrypoint verify(domain: string) : bool =
     challenge_check(domain)
 
-  stateful entrypoint withdraw(domain: string) =
+  stateful entrypoint withdraw(domain: string) : unit =
     is_domain_owner(domain)
     is_enough_balance(domain)
     let tips_for_payment_list : list(int) = get_tips_for_payment_list(domain: string)
@@ -82,7 +82,7 @@ contract WaelletTip =
     // return all the tips for certain domain
     filter_owner(filter_unpaid_tips(Map.to_list(state.websites[domain].tips), []), domain)
 
-  function filter_unpaid_tips(tips: list((int, tip)), unpaid_tips_ids: list(int)) : list(int) =
+  function filter_unpaid_tips(tips: list((int * tip)), unpaid_tips_ids: list(int)) : list(int) =
     switch(tips)
       [] => unpaid_tips_ids
       (id, tip) :: l' =>
@@ -125,11 +125,21 @@ contract WaelletTip =
         set_tips_repaid'(l', domain)
 
   stateful function challenge_generate(domain: string) : string =
-    let challenge = Bytes.to_str(String.blake2b(domain))
+    let challenge = Bytes.to_str(String.blake2b(String.concat(Address.to_str(Call.caller), domain)))
     is_website_present(domain)
     put(state{ websites[domain].challenge = Some(challenge) })
-    Chain.event(LogWebsiteChallengeGenerated(Call.caller, Chain.timestamp, String.concat(String.concat(domain,"="),challenge)))
-    challenge
+    let challenge_memory = String.concat("waellet-tip-verification=",challenge)
+    Chain.event(LogWebsiteChallengeGenerated(Call.caller, Chain.timestamp, challenge_memory))
+    challenge_memory
+
+  stateful entrypoint get_answer(question: string) : bool =
+    let oracle_query : oracle_query(string, string) =
+      Oracle.query( ok_2EaKARLitjLUsYxvL8tFhhUD3Z9EiBieD6yBAaGztJNcjKogXU : oracle(string, string)
+                  , question
+                  , 30000
+                  , RelativeTTL(100)
+                  , FixedTTL(100) )
+    true
 
   stateful function challenge_check(domain: string) : bool =
     // Call oracle and verify challenge
@@ -142,13 +152,13 @@ contract WaelletTip =
     Chain.event(LogWebsiteVerified(Call.caller, Chain.timestamp, domain))
     true
 
-  function is_domain_owner(domain: string) =
+  function is_domain_owner(domain: string) : unit =
     require(state.websites[domain].owner[Call.caller].date_to != 0
       && state.websites[domain].owner[Call.caller].date_from =< Chain.timestamp
       && state.websites[domain].owner[Call.caller].date_to >= Chain.timestamp
       , "NOT_DOMAIN_OWNER")
 
-  function is_enough_balance(domain: string) =
+  function is_enough_balance(domain: string) : unit =
     require(state.websites[domain].balance > 0, "INSUFFICIENT_BALANCE")
 
   entrypoint all_domain_expire_dates(domain) : list(int) =
@@ -169,7 +179,7 @@ contract WaelletTip =
         else
           is_domain_expired'(l')
 
-  stateful function is_website_present(domain: string) =
+  stateful function is_website_present(domain: string) : unit =
     if(!Map.member(domain, state.websites))
       let website : website = { domain = domain
                               , challenge = None
