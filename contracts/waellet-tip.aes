@@ -137,8 +137,8 @@ contract WaelletTip =
       Oracle.query( ok_2EaKARLitjLUsYxvL8tFhhUD3Z9EiBieD6yBAaGztJNcjKogXU : oracle(string, string)
                   , question
                   , 30000
-                  , RelativeTTL(10)
-                  , FixedTTL(10) )
+                  , RelativeTTL(200)
+                  , RelativeTTL(200) )
     true
 
   stateful function challenge_check(domain: string) : bool =
