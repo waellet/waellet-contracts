@@ -1,0 +1,24 @@
+contract Token =
+  record meta_info =
+    { name : string
+    , symbol : string
+    , decimals : int }
+    
+  entrypoint meta_info     : ()              => meta_info
+  entrypoint total_supply  : ()              => int
+  entrypoint owner         : ()              => address
+  entrypoint balances      : ()              => map(address, int)
+  entrypoint balance       : (address)       => option(int)
+  entrypoint transfer      : (address, int)  => unit
+
+contract TokenRegistry =
+  entrypoint add_token              : (Token)           => unit
+  entrypoint get_all_tokens         : ()                => map(Token, Token.meta_info)
+  entrypoint get_token_meta_info    : (Token)           => Token.meta_info
+  entrypoint get_token_balances     : (Token)           => map(address, int)
+  entrypoint get_token_balance      : (Token, address)  => option(int)
+  entrypoint get_token_owner        : (Token)           => address
+  entrypoint get_token_total_supply : (Token)           => int
+  
+contract GetTokenRegistryState =
+  entrypoint get_state(registry: TokenRegistry) : map(Token, Token.meta_info) = registry.get_all_tokens()
