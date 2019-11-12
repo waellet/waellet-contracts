@@ -1,3 +1,7 @@
+@compiler >= 4
+
+include "List.aes"
+
 contract WaelletTip =
 
   record state = 
