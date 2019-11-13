@@ -1,29 +1,35 @@
+@compiler >= 4
+
+include "List.aes"
+
 contract WaelletTip =
 
   record state = 
-    { websites: map(string, website)
-    , tip_seq_id: int }
+    { websites      : map(string, website)
+    , tip_seq_id    : int
+    , oracle_service: oracle(string, string) }
 
   record website = 
-    { domain: string
-    , challenge: option(string)
-    , verified: bool
-    , date_expire: int
-    , owner: map(address, timeframe)
-    , balance: int
-    , tips: map(int, tip) }
+    { domain        : string
+    , challenge     : option(string)
+    , verified      : bool
+    , date_expire   : int
+    , owner         : map(address, timeframe)
+    , balance       : int
+    , queries       : map(int, oracle_query(string, string))
+    , tips          : map(int, tip) }
 
   record tip = 
-    { seq_id: int
-    , repaid: bool
-    , sender: address
-    , date_received: int
-    , amount: int
-    , note: option(string) }
+    { seq_id        : int
+    , repaid        : bool
+    , sender        : address
+    , date_received : int
+    , amount        : int
+    , note          : option(string) }
 
   record timeframe = 
-    { date_from: int
-    , date_to: int }
+    { date_from     : int
+    , date_to       : int }
 
   datatype event = 
       LogTipReceived(indexed address, indexed int, string) 
@@ -32,7 +38,10 @@ contract WaelletTip =
     | LogWebsiteChallengeGenerated(indexed address, indexed int, string)
     | LogTipsWithdrawn(indexed address, indexed int, indexed int)
 
-  entrypoint init() : state = { websites = {}, tip_seq_id = 0 }
+  entrypoint init() : state =
+    { websites = {},
+      tip_seq_id = 0,
+      oracle_service = ok_2EaKARLitjLUsYxvL8tFhhUD3Z9EiBieD6yBAaGztJNcjKogXU : oracle(string, string) }
 
   stateful entrypoint tip(domain: string, note: option(string)) : unit =
     is_website_present(domain)
@@ -132,30 +141,39 @@ contract WaelletTip =
     Chain.event(LogWebsiteChallengeGenerated(Call.caller, Chain.timestamp, challenge_memory))
     challenge_memory
 
-  stateful entrypoint get_answer(question: string) : bool =
-    let oracle_query : oracle_query(string, string) =
-      Oracle.query( ok_2EaKARLitjLUsYxvL8tFhhUD3Z9EiBieD6yBAaGztJNcjKogXU : oracle(string, string)
-                  , question
-                  , 30000
-                  , RelativeTTL(100)
-                  , FixedTTL(100) )
-    true
-
   stateful function challenge_check(domain: string) : bool =
-    // Call oracle and verify challenge
-    // let oracle_response = query_oracle_here(domain)
-    // if(oracle_response == state.websites[domain].challenge)
-    // put(state{ websites[domain].verified = true })
-    
-    // Testing:
-    put(state{ websites[domain].verified = true })
-    Chain.event(LogWebsiteVerified(Call.caller, Chain.timestamp, domain))
-    true
+    // check if an oracle query is already present for this
+    if (Map.size(state.websites[domain].queries) == 0)
+      let oracle_query : oracle_query(string, string) =
+        Oracle.query( state.oracle_service
+                , domain
+                , 30000
+                , RelativeTTL(200)
+                , RelativeTTL(200) )
+      put(state{ websites[domain].queries[Map.size(state.websites[domain].queries)] = oracle_query })
+    else
+      // check if already verified
+      if(state.websites[domain].verified == false)
+        // get answer
+        let answer = get_answer(state.websites[domain].queries[0])
+        switch(state.websites[domain].challenge)
+          Some(challenge) =>
+            if(answer == challenge)
+              put(state{ websites[domain].verified = true })
+              Chain.event(LogWebsiteVerified(Call.caller, Chain.timestamp, domain))
+
+    state.websites[domain].verified
+
+  function get_answer(query_id : oracle_query(string, string)) : string =
+    switch(Oracle.get_answer(state.oracle_service, query_id))
+      None => "no answer"
+      Some(x) => x
 
   function is_domain_owner(domain: string) : unit =
-    require(state.websites[domain].owner[Call.caller].date_to != 0
-      && state.websites[domain].owner[Call.caller].date_from =< Chain.timestamp
-      && state.websites[domain].owner[Call.caller].date_to >= Chain.timestamp
+    let memory_website = state.websites[domain].owner[Call.caller]
+    require( memory_website.date_to   != 0
+          && memory_website.date_from =< Chain.timestamp
+          && memory_website.date_to   >= Chain.timestamp
       , "NOT_DOMAIN_OWNER")
 
   function is_enough_balance(domain: string) : unit =
@@ -163,7 +181,7 @@ contract WaelletTip =
 
   entrypoint all_domain_expire_dates(domain) : list(int) =
     let domain_expires_list = Map.to_list(state.websites[domain].owner)
-    map(tuple_second, domain_expires_list)
+    List.map(tuple_second, domain_expires_list)
 
   function is_domain_expired(domain: string) : bool =
     switch(Map.member(domain, state.websites))
@@ -181,58 +199,25 @@ contract WaelletTip =
 
   stateful function is_website_present(domain: string) : unit =
     if(!Map.member(domain, state.websites))
-      let website : website = { domain = domain
-                              , challenge = None
-                              , verified = false
-                              , date_expire = 0
-                              , owner = {}
-                              , balance = 0
-                              , tips = {} }
-      put(state{ websites[domain] = website })
+      let new_website : website =
+        { domain      = domain,
+          challenge   = None,
+          verified    = false,
+          date_expire = 0,
+          owner       = {},
+          balance     = 0,
+          queries     = {},
+          tips        = {} }
+      put(state{ websites[domain] = new_website })
       Chain.event(LogWebsiteAdded(Call.caller, Chain.timestamp, domain))
   
   // general helper functions //
-
-  function length(l : list('a)) : int = length'(l, 0)
-  function length'(l : list('a), x : int) : int =
-    switch(l)
-      [] => x
-      _ :: l' => length'(l', x + 1)
 
   function tuple_second(tuple) =
     switch(tuple)
       (_, e) => e.date_to
 
   function sum(f : 'a => int, l : list('a)) : int =
-    foldr((x, y) => x + y, 0, map(f, l))
-
-  function map(f : 'a => 'b, l : list('a)) : list('b) =
-    switch(l)
-     [] => []
-     e :: l' => f(e) :: map(f, l')
-
-  function foldr(f : (('a, 'b) => 'b), z: 'b, l : list('a)) : 'b =
-    switch(l)
-      [] => z
-      e :: l' => f(e, foldr(f, z, l'))
-
-  function insert_by(f: (('a, 'a) => bool), x : 'a, l : list('a)) : list('a) =
-    switch(l)
-      [] => [x]
-      (e :: l') =>
-        if(f(x, e))
-          e :: insert_by(f, x, l')
-        else
-          x :: l
-
-  function filter(f : ('a) => bool, l : list('a)) = filter'(f, l, [])
-  function filter'(f : ('a) => bool, l : list('a), acc : list('a)) =
-    switch(l)
-      [] => acc
-      e :: l' =>
-        if(f(e))
-          filter'(f, l', e :: acc)
-        else
-          filter'(f, l', acc)
+    List.foldr((x, y) => x + y, 0, List.map(f, l))
 
   function is_greater_zero(x : int) : bool = x > 0
