@@ -142,23 +142,32 @@ contract WaelletTip =
     challenge_memory
 
   stateful function challenge_check(domain: string) : bool =
-    // Call oracle and verify challenge
-    let oracle_query : oracle_query(string, string) =
-      Oracle.query( state.oracle_service
-                  , domain
-                  , 30000
-                  , RelativeTTL(200)
-                  , RelativeTTL(200) )
-      
-    put(state{ websites[domain].queries[Map.size(state.websites[domain].queries)] = oracle_query })
+    // check if an oracle query is already present for this
+    if (Map.size(state.websites[domain].queries) == 0)
+      let oracle_query : oracle_query(string, string) =
+        Oracle.query( state.oracle_service
+                , domain
+                , 30000
+                , RelativeTTL(200)
+                , RelativeTTL(200) )
+      put(state{ websites[domain].queries[Map.size(state.websites[domain].queries)] = oracle_query })
+    else
+      // check if already verified
+      if(state.websites[domain].verified == false)
+        // get answer
+        let answer = get_answer(state.websites[domain].queries[0])
+        switch(state.websites[domain].challenge)
+          Some(challenge) =>
+            if(answer == challenge)
+              put(state{ websites[domain].verified = true })
+              Chain.event(LogWebsiteVerified(Call.caller, Chain.timestamp, domain))
 
-    // if(oracle_response == state.websites[domain].challenge)
-    // put(state{ websites[domain].verified = true })
-    
-    // Testing:
-    put(state{ websites[domain].verified = true })
-    Chain.event(LogWebsiteVerified(Call.caller, Chain.timestamp, domain))
-    true
+    state.websites[domain].verified
+
+  function get_answer(query_id : oracle_query(string, string)) : string =
+    switch(Oracle.get_answer(state.oracle_service, query_id))
+      None => "no answer"
+      Some(x) => x
 
   function is_domain_owner(domain: string) : unit =
     let memory_website = state.websites[domain].owner[Call.caller]
