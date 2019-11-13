@@ -43,7 +43,8 @@ contract WaelletTip =
       tip_seq_id = 0,
       oracle_service = ok_2EaKARLitjLUsYxvL8tFhhUD3Z9EiBieD6yBAaGztJNcjKogXU : oracle(string, string) }
 
-  stateful entrypoint tip(domain: string, note: option(string)) : unit =
+  stateful entrypoint tip (domain': string, note: option(string)) : unit =
+    let domain = trim_domain(domain')
     is_website_present(domain)
     let tip : tip = { seq_id         = state.tip_seq_id
                     , repaid         = false
@@ -57,24 +58,29 @@ contract WaelletTip =
     put(state{ tip_seq_id = state.tip_seq_id + 1 })
     Chain.event(LogTipReceived(Call.caller, Call.value, domain))
 
-  entrypoint balance(domain:string) : option(int) =
+  entrypoint balance (domain' : string) : option(int) =
+    let domain = trim_domain(domain')
     switch(Map.lookup(domain, state.websites))
       None    => Some(0)
       Some(x) => Some(state.websites[domain].balance)
 
-  entrypoint status(domain: string) : option(bool) =
+  entrypoint status (domain' : string) : option(bool) =
+    let domain = trim_domain(domain')
     switch(Map.lookup(domain, state.websites))
       None    => Some(false)
       Some(x) => Some(state.websites[domain].verified)
 
-  stateful entrypoint claim(domain: string) : string =
+  stateful entrypoint claim (domain' : string) : string =
+    let domain = trim_domain(domain')
     is_domain_expired(domain)
     challenge_generate(domain)
 
-  stateful entrypoint verify(domain: string) : bool =
+  stateful entrypoint verify (domain' : string) : bool =
+    let domain = trim_domain(domain')
     challenge_check(domain)
 
-  stateful entrypoint withdraw(domain: string) : unit =
+  stateful entrypoint withdraw (domain' : string) : unit =
+    let domain = trim_domain(domain')
     is_domain_owner(domain)
     is_enough_balance(domain)
     let tips_for_payment_list : list(int) = get_tips_for_payment_list(domain: string)
@@ -86,6 +92,9 @@ contract WaelletTip =
     Chain.event(LogTipsWithdrawn(Call.caller, Chain.timestamp, withdraw_amount))
 
   // PRIVATE FUNCTIONS AND MODIFIERS
+
+  function trim_domain(domain: string) : string =
+    domain
 
   function get_tips_for_payment_list(domain: string) : list(int) =
     // return all the tips for certain domain
