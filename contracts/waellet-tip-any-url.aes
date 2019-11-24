@@ -1,6 +1,7 @@
 @compiler >= 4
 
 include "List.aes"
+include "Option.aes"
 
 contract WaelletTip =
 
@@ -32,11 +33,11 @@ contract WaelletTip =
     , date_to       : int }
 
   datatype event = 
-      LogTipReceived(indexed address, indexed int, string) 
-    | LogWebsiteAdded(indexed address, indexed int, string)
-    | LogWebsiteVerified(indexed address, indexed int, string)
-    | LogWebsiteChallengeGenerated(indexed address, indexed int, string)
-    | LogTipsWithdrawn(indexed address, indexed int, indexed int)
+      LogTipReceived(address, int, string) 
+    | LogWebsiteAdded(address, int, string)
+    | LogWebsiteVerified(address, int, string)
+    | LogWebsiteChallengeGenerated(address, int, string)
+    | LogTipsWithdrawn(address, int, int)
 
   entrypoint init() : state =
     { websites = {},
