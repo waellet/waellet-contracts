@@ -3,7 +3,7 @@
 include "List.aes"
 include "Option.aes"
 
-contract WaelletTip =
+contract WaelletTipAny =
 
   record state = 
     { websites      : map(string, website)
@@ -33,43 +33,36 @@ contract WaelletTip =
     , date_to       : int }
 
   datatype event = 
-      LogTipReceived(address, int, string) 
-    | LogWebsiteAdded(address, int, string)
-    | LogWebsiteVerified(address, int, string)
-    | LogWebsiteChallengeGenerated(address, int, string)
-    | LogTipsWithdrawn(address, int, int)
+      TipReceived(address, int, string) 
+    | WebsiteAdded(address, int, string)
+    | WebsiteVerified(address, int, string)
+    | WebsiteChallengeGenerated(address, int, string)
+    | TipsWithdrawn(address, int, int)
 
-  entrypoint init(oracle_service' : oracle(string, string)) : state =
+  entrypoint init (oracle_service' : oracle(string, string)) : state =
     { websites = {},
       tip_seq_id = 0,
       oracle_service = oracle_service' }
 
-  stateful entrypoint tip (domain': string, note: option(string)) : unit =
+  payable stateful entrypoint tip (domain': string, note: option(string)) : unit =
     let domain = trim_domain(domain')
     is_website_present(domain)
-    let tip : tip = { seq_id         = state.tip_seq_id
-                    , repaid         = false
-                    , sender         = Call.caller
-                    , date_received  = Chain.timestamp
-                    , amount         = Call.value
-                    , note           = note }
-
-    put(state{ websites[domain].tips[state.tip_seq_id] = tip })
+    put(state{ websites[domain].tips[state.tip_seq_id] = new_tip(note) })
     put(state{ websites[domain].balance @ b = b + Call.value })
     put(state{ tip_seq_id = state.tip_seq_id + 1 })
-    Chain.event(LogTipReceived(Call.caller, Call.value, domain))
+    Chain.event(TipReceived(Call.caller, Call.value, domain))
 
   entrypoint balance (domain' : string) : option(int) =
     let domain = trim_domain(domain')
     switch(Map.lookup(domain, state.websites))
-      None    => Some(0)
-      Some(x) => Some(state.websites[domain].balance)
+      None    => None
+      Some(x) => Some(x.balance)
 
   entrypoint status (domain' : string) : option(bool) =
     let domain = trim_domain(domain')
     switch(Map.lookup(domain, state.websites))
-      None    => Some(false)
-      Some(x) => Some(state.websites[domain].verified)
+      None    => None
+      Some(x) => Some(x.verified)
 
   stateful entrypoint claim (domain' : string) : string =
     let domain = trim_domain(domain')
@@ -90,9 +83,17 @@ contract WaelletTip =
     put(state{websites[domain].balance @ b = b - withdraw_amount})
     require(set_tips_repaid(tips_for_payment_list, domain), "ERROR_TIPS_PAYMENT")
     Chain.spend(Call.caller, withdraw_amount)
-    Chain.event(LogTipsWithdrawn(Call.caller, Chain.timestamp, withdraw_amount))
+    Chain.event(TipsWithdrawn(Call.caller, Chain.timestamp, withdraw_amount))
 
   // PRIVATE FUNCTIONS AND MODIFIERS
+
+  function new_tip(note: option(string)) : tip =
+    { seq_id         = state.tip_seq_id
+    , repaid         = false
+    , sender         = Call.caller
+    , date_received  = Chain.timestamp
+    , amount         = Call.value
+    , note           = note }
 
   function trim_domain(domain: string) : string =
     domain
@@ -148,7 +149,7 @@ contract WaelletTip =
     is_website_present(domain)
     put(state{ websites[domain].challenge = Some(challenge) })
     let challenge_memory = String.concat("waellet-tip-verification=",challenge)
-    Chain.event(LogWebsiteChallengeGenerated(Call.caller, Chain.timestamp, challenge_memory))
+    Chain.event(WebsiteChallengeGenerated(Call.caller, Chain.timestamp, challenge_memory))
     challenge_memory
 
   stateful function challenge_check(domain: string) : bool =
@@ -170,7 +171,7 @@ contract WaelletTip =
           Some(challenge) =>
             if(answer == challenge)
               put(state{ websites[domain].verified = true })
-              Chain.event(LogWebsiteVerified(Call.caller, Chain.timestamp, domain))
+              Chain.event(WebsiteVerified(Call.caller, Chain.timestamp, domain))
 
     state.websites[domain].verified
 
@@ -219,7 +220,7 @@ contract WaelletTip =
           queries     = {},
           tips        = {} }
       put(state{ websites[domain] = new_website })
-      Chain.event(LogWebsiteAdded(Call.caller, Chain.timestamp, domain))
+      Chain.event(WebsiteAdded(Call.caller, Chain.timestamp, domain))
   
   // general helper functions //
 
