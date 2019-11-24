@@ -16,7 +16,6 @@ contract WaelletTipAny =
     , verified      : bool
     , date_expire   : int
     , owner         : map(address, timeframe)
-    , balance       : int
     , queries       : map(int, oracle_query(string, string))
     , tips          : map(int, tip) }
 
@@ -48,15 +47,18 @@ contract WaelletTipAny =
     let domain = trim_domain(domain')
     is_website_present(domain)
     put(state{ websites[domain].tips[state.tip_seq_id] = new_tip(note) })
-    put(state{ websites[domain].balance @ b = b + Call.value })
     put(state{ tip_seq_id = state.tip_seq_id + 1 })
     Chain.event(TipReceived(Call.caller, Call.value, domain))
 
   entrypoint balance (domain' : string) : option(int) =
     let domain = trim_domain(domain')
-    switch(Map.lookup(domain, state.websites))
-      None    => None
-      Some(x) => Some(x.balance)
+
+    // TODO: calculate balance here
+    // we were previously storing the balance in state
+    // which is not cost efficient.
+    // Optimisation: calculate this in a pure functional way
+    
+    None
 
   entrypoint status (domain' : string) : option(bool) =
     let domain = trim_domain(domain')
@@ -76,7 +78,7 @@ contract WaelletTipAny =
   stateful entrypoint withdraw (domain' : string) : unit =
     let domain = trim_domain(domain')
     is_domain_owner(domain)
-    is_enough_balance(domain)
+    is_enough_balance(balance(domain))
     let tips_for_payment_list : list(int) = get_tips_for_payment_list(domain: string)
     let withdraw_amount : int = get_withdraw_amount(tips_for_payment_list, domain: string)
     require(withdraw_amount > 0, "INSUFFICIENT_BALANCE")
