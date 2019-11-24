@@ -1,0 +1,35 @@
+@compiler >= 4
+
+contract OracleCheck =
+  
+  record state = {  queries : map(int, oracle_query(string, string))
+                 ,  oracle_service: oracle(string, string) }
+                 
+  entrypoint init() : state = 
+    { queries = {},
+      oracle_service = ok_zPoY7cSHy2wBKFsdWJGXM7LnSjVt6cn1TWBDdRBUMC7Tur2NQ : oracle(string, string) }
+  
+  stateful entrypoint ask_oracle(domain: string) : int =
+    let fee : int = Oracle.query_fee(state.oracle_service)
+  
+    let oracle_query : oracle_query(string, string) =
+        Oracle.query( state.oracle_service
+                    , domain
+                    , fee
+                    , RelativeTTL(50)
+                    , RelativeTTL(50) )
+    let oracle_map_id = Map.size(state.queries)
+    put(state{ queries[oracle_map_id] = oracle_query })
+    oracle_map_id
+    
+  entrypoint get_balance() : int = Contract.balance
+
+  entrypoint get_query(oracle_map_id: int) : oracle_query(string, string) = state.queries[oracle_map_id]
+  
+  payable stateful entrypoint deposit() : unit =
+    require(Call.value > 0, "INSUFFICIENT_FUNDS")
+  
+  entrypoint get_answer(oracle_map_id : int) : string =
+    switch(Oracle.get_answer(state.oracle_service, state.queries[oracle_map_id]))
+      None         => "no answer yet"
+      Some(answer) => answer

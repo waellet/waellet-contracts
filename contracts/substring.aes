@@ -1,0 +1,6 @@
+@compiler >= 4
+
+contract Substring =
+
+    entrypoint substring(count : int, my_string : string) : string =
+        my_string
