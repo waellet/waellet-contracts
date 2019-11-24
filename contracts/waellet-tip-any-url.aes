@@ -33,16 +33,16 @@ contract WaelletTipAny =
     , date_to       : int }
 
   datatype event = 
-      TipReceived(address, int, string) 
+    TipReceived(address, int, string) 
     | WebsiteAdded(address, int, string)
     | WebsiteVerified(address, int, string)
     | WebsiteChallengeGenerated(address, int, string)
     | TipsWithdrawn(address, int, int)
 
   entrypoint init (oracle_service' : oracle(string, string)) : state =
-    { websites = {},
-      tip_seq_id = 0,
-      oracle_service = oracle_service' }
+    { websites        = {},
+      tip_seq_id      = 0,
+      oracle_service  = oracle_service' }
 
   payable stateful entrypoint tip (domain': string, note: option(string)) : unit =
     let domain = trim_domain(domain')
