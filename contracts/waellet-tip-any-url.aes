@@ -6,7 +6,8 @@ include "Option.aes"
 contract WaelletTipAny =
 
   record state = 
-    { tips          : map(string, map(int, tip))
+    { tips          : map(string * int, tip)
+    , tips_flat     : map(string, int)
     , oracle_service: oracle(string, string) }
 
   record tip = 
@@ -21,17 +22,25 @@ contract WaelletTipAny =
     TipReceived(address, int, string) 
 
   entrypoint init (oracle_service' : oracle(string, string)) : state =
-    { tips = {}, oracle_service  = oracle_service' }
+    { tips = {}, tips_flat = {}, oracle_service = oracle_service' }
 
   payable stateful entrypoint tip (url: string, note: option(string)) : unit =
-    put(state{ tips[url = {}][Map.size(state.tips[url = {}])] = new_tip(url, note) })
+    put(state{ tips[(url, size(url))] = new_tip(url, note),
+               tips_flat[url = 0] @ n = n + 1 })
     Chain.event(TipReceived(Call.caller, Call.value, url))
 
   stateful entrypoint withdraw (url : string) : unit =
     // aggregate all tips for the present url which are not claimed yet
     Chain.spend(Call.caller, 0)
 
+  entrypoint tips_for_url(url : string) = tips_by_key(url)
+
   // PRIVATE FUNCTIONS AND MODIFIERS
+
+  function tips_by_key(key : string) =
+    [ state.tips[(key, n)] | n <- [0..size(key) - 1] ]
+
+  function size(key : string) : int = state.tips_flat[key = 0]
 
   stateful function new_tip(url : string, note: option(string)) : tip =
     { sender        = Call.caller,
@@ -39,7 +48,7 @@ contract WaelletTipAny =
       repaid        = false,
       amount        = Call.value,
       note          = note,
-      queries       = { [0] = oracle_query_tip_url(url) } }
+      queries       = {} }
 
   stateful function oracle_query_tip_url(url: string) : oracle_query(string, string) =
     Oracle.query( state.oracle_service
