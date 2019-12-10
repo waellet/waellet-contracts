@@ -23,27 +23,27 @@ contract WaelletTipAny =
   entrypoint init (oracle_service' : oracle(string, string)) : state =
     { tips = {}, oracle_service  = oracle_service' }
 
-  payable stateful entrypoint tip (url': string, note: option(string)) : unit =
-    put(state{ tips[url'][Map.size(state.tips[url'])] = new_tip(url', note) })
-    Chain.event(TipReceived(Call.caller, Call.value, url'))
+  payable stateful entrypoint tip (url: string, note: option(string)) : unit =
+    put(state{ tips[url = {}][Map.size(state.tips[url = {}])] = new_tip(url, note) })
+    Chain.event(TipReceived(Call.caller, Call.value, url))
 
-  stateful entrypoint withdraw (url' : string) : unit =
+  stateful entrypoint withdraw (url : string) : unit =
+    // aggregate all tips for the present url which are not claimed yet
     Chain.spend(Call.caller, 0)
 
   // PRIVATE FUNCTIONS AND MODIFIERS
 
-  stateful function new_tip(url' : string, note: option(string)) : tip =
+  stateful function new_tip(url : string, note: option(string)) : tip =
     { sender        = Call.caller,
       received_at   = Chain.timestamp,
       repaid        = false,
       amount        = Call.value,
       note          = note,
-      queries       = { [0] = oracle_query_tip_url(url') } }
+      queries       = { [0] = oracle_query_tip_url(url) } }
 
-
-  stateful function oracle_query_tip_url(url': string) : oracle_query(string, string) =
+  stateful function oracle_query_tip_url(url: string) : oracle_query(string, string) =
     Oracle.query( state.oracle_service
-      , url'
+      , url
       , 30000
       , RelativeTTL(200)
       , RelativeTTL(200) )
