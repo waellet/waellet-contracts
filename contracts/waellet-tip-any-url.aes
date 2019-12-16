@@ -8,6 +8,7 @@ contract WaelletTipAny =
   record state = 
     { tips          : map(string * int, tip)
     , tips_flat     : map(string, int)
+    , owner_verify  : map(string, verify)
     , oracle_service: oracle(string, string) }
 
   record tip = 
@@ -15,14 +16,20 @@ contract WaelletTipAny =
     , received_at   : int
     , repaid        : bool
     , amount        : int
-    , note          : option(string)
-    , queries       : map(int, oracle_query(string, string)) }
+    , note          : option(string) }
+    
+  record verify =
+   { owner          : option(address)
+   , queries        : map(int, oracle_query(string, string)) }
 
   datatype event = 
     TipReceived(address, int, string) 
 
   entrypoint init (oracle_service' : oracle(string, string)) : state =
-    { tips = {}, tips_flat = {}, oracle_service = oracle_service' }
+    { tips = {},
+      tips_flat = {},
+      owner_verify = {},
+      oracle_service = oracle_service' }
 
   payable stateful entrypoint tip (url: string, note: option(string)) : unit =
     put(state{ tips[(url, size(url))] = new_tip(url, note),
@@ -34,8 +41,21 @@ contract WaelletTipAny =
     Chain.spend(Call.caller, 0)
 
   entrypoint tips_for_url(url : string) = tips_by_key(url)
+  entrypoint get_state() : state = state
+  entrypoint get_verify(url : string) : verify = Map.lookup_default(url, state.owner_verify, { owner = None, queries = {} })
+  
+  stateful entrypoint claim(url: string) : bool =
+    let new_query = oracle_query_tip_url(url)
+    get_url_owner(url)
+    true
 
   // PRIVATE FUNCTIONS AND MODIFIERS
+  
+  function get_url_owner(url : string) : option(address) =
+    switch(Map.lookup(url, state.owner_verify))
+      Some(x) =>
+        switch(x.owner)
+          Some(y) => Some(y)
 
   function tips_by_key(key : string) =
     [ state.tips[(key, n)] | n <- [0..size(key) - 1] ]
@@ -47,12 +67,11 @@ contract WaelletTipAny =
       received_at   = Chain.timestamp,
       repaid        = false,
       amount        = Call.value,
-      note          = note,
-      queries       = {} }
+      note          = note }
 
   stateful function oracle_query_tip_url(url: string) : oracle_query(string, string) =
     Oracle.query( state.oracle_service
       , url
-      , 30000
+      , 1
       , RelativeTTL(200)
       , RelativeTTL(200) )
