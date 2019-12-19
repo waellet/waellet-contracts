@@ -6,231 +6,72 @@ include "Option.aes"
 contract WaelletTipAny =
 
   record state = 
-    { websites      : map(string, website)
-    , tip_seq_id    : int
+    { tips          : map(string * int, tip)
+    , tips_flat     : map(string, int)
+    , owner_verify  : map(string, verify)
     , oracle_service: oracle(string, string) }
 
-  record website = 
-    { domain        : string
-    , challenge     : option(string)
-    , verified      : bool
-    , date_expire   : int
-    , owner         : map(address, timeframe)
-    , queries       : map(int, oracle_query(string, string))
-    , tips          : map(int, tip) }
-
   record tip = 
-    { seq_id        : int
+    { sender        : address
+    , received_at   : int
     , repaid        : bool
-    , sender        : address
-    , date_received : int
     , amount        : int
     , note          : option(string) }
-
-  record timeframe = 
-    { date_from     : int
-    , date_to       : int }
+    
+  record verify =
+   { owner          : option(address)
+   , queries        : map(int, oracle_query(string, string)) }
 
   datatype event = 
     TipReceived(address, int, string) 
-    | WebsiteAdded(address, int, string)
-    | WebsiteVerified(address, int, string)
-    | WebsiteChallengeGenerated(address, int, string)
-    | TipsWithdrawn(address, int, int)
 
   entrypoint init (oracle_service' : oracle(string, string)) : state =
-    { websites        = {},
-      tip_seq_id      = 0,
-      oracle_service  = oracle_service' }
+    { tips = {},
+      tips_flat = {},
+      owner_verify = {},
+      oracle_service = oracle_service' }
 
-  payable stateful entrypoint tip (domain': string, note: option(string)) : unit =
-    let domain = trim_domain(domain')
-    is_website_present(domain)
-    put(state{ websites[domain].tips[state.tip_seq_id] = new_tip(note) })
-    put(state{ tip_seq_id = state.tip_seq_id + 1 })
-    Chain.event(TipReceived(Call.caller, Call.value, domain))
+  payable stateful entrypoint tip (url: string, note: option(string)) : unit =
+    put(state{ tips[(url, size(url))] = new_tip(url, note),
+               tips_flat[url = 0] @ n = n + 1 })
+    Chain.event(TipReceived(Call.caller, Call.value, url))
 
-  entrypoint balance (domain' : string) : option(int) =
-    let domain = trim_domain(domain')
+  stateful entrypoint withdraw (url : string) : unit =
+    // aggregate all tips for the present url which are not claimed yet
+    Chain.spend(Call.caller, 0)
 
-    // TODO: calculate balance here
-    // we were previously storing the balance in state
-    // which is not cost efficient.
-    // Optimisation: calculate this in a pure functional way
-    
-    None
-
-  entrypoint status (domain' : string) : option(bool) =
-    let domain = trim_domain(domain')
-    switch(Map.lookup(domain, state.websites))
-      None    => None
-      Some(x) => Some(x.verified)
-
-  stateful entrypoint claim (domain' : string) : string =
-    let domain = trim_domain(domain')
-    is_domain_expired(domain)
-    challenge_generate(domain)
-
-  stateful entrypoint verify (domain' : string) : bool =
-    let domain = trim_domain(domain')
-    challenge_check(domain)
-
-  stateful entrypoint withdraw (domain' : string) : unit =
-    let domain = trim_domain(domain')
-    is_domain_owner(domain)
-    is_enough_balance(balance(domain))
-    let tips_for_payment_list : list(int) = get_tips_for_payment_list(domain: string)
-    let withdraw_amount : int = get_withdraw_amount(tips_for_payment_list, domain: string)
-    require(withdraw_amount > 0, "INSUFFICIENT_BALANCE")
-    put(state{websites[domain].balance @ b = b - withdraw_amount})
-    require(set_tips_repaid(tips_for_payment_list, domain), "ERROR_TIPS_PAYMENT")
-    Chain.spend(Call.caller, withdraw_amount)
-    Chain.event(TipsWithdrawn(Call.caller, Chain.timestamp, withdraw_amount))
+  entrypoint tips_for_url(url : string) = tips_by_key(url)
+  entrypoint get_state() : state = state
+  entrypoint get_verify(url : string) : verify = Map.lookup_default(url, state.owner_verify, { owner = None, queries = {} })
+  
+  stateful entrypoint claim(url: string) : bool =
+    let new_query = oracle_query_tip_url(url)
+    get_url_owner(url)
+    true
 
   // PRIVATE FUNCTIONS AND MODIFIERS
-
-  function new_tip(note: option(string)) : tip =
-    { seq_id         = state.tip_seq_id
-    , repaid         = false
-    , sender         = Call.caller
-    , date_received  = Chain.timestamp
-    , amount         = Call.value
-    , note           = note }
-
-  function trim_domain(domain: string) : string =
-    domain
-
-  function get_tips_for_payment_list(domain: string) : list(int) =
-    // return all the tips for certain domain
-    filter_owner(filter_unpaid_tips(Map.to_list(state.websites[domain].tips), []), domain)
-
-  function filter_unpaid_tips(tips: list((int * tip)), unpaid_tips_ids: list(int)) : list(int) =
-    switch(tips)
-      []              => unpaid_tips_ids
-      (id, tip) :: l' =>
-        switch(tip.repaid)
-          false => tip.seq_id :: unpaid_tips_ids
-        filter_unpaid_tips(l', unpaid_tips_ids)
-
-  function filter_owner(tips: list(int), domain: string) : list(int) =
-    filter_owner'(tips, domain, [])
   
-  function filter_owner'(tips: list(int), domain: string, filtered: list(int)) : list(int) =
-    switch(tips)
-      []      => filtered
-      e :: l' =>
-        switch(ownership_timeframe_matches(state.websites[domain].tips[e], domain))
-          true => e :: filtered
-        filter_owner'(l', domain, filtered)
-           
-  function ownership_timeframe_matches(tip : tip, domain: string) : bool =
-    diff(tip, state.websites[domain].owner[Call.caller] : timeframe)
+  function get_url_owner(url : string) : option(address) =
+    switch(Map.lookup(url, state.owner_verify))
+      Some(x) =>
+        switch(x.owner)
+          Some(y) => Some(y)
 
-  function get_withdraw_amount(tips_for_payment: list(int), domain: string) : int =
-    // filter the tips for the current timeframe ownership
-    possible_withdraw_amount(tips_for_payment, domain) 
+  function tips_by_key(key : string) =
+    [ state.tips[(key, n)] | n <- [0..size(key) - 1] ]
 
-  function possible_withdraw_amount(tips: list(int), domain: string) : int =
-    sum((tip_id) => (state.websites[domain].tips[tip_id].amount), tips)
+  function size(key : string) : int = state.tips_flat[key = 0]
 
-  function diff(tip : tip, timeframe: timeframe) : bool = tip.date_received >= timeframe.date_from && tip.date_received =< timeframe.date_to
+  stateful function new_tip(url : string, note: option(string)) : tip =
+    { sender        = Call.caller,
+      received_at   = Chain.timestamp,
+      repaid        = false,
+      amount        = Call.value,
+      note          = note }
 
-  stateful function set_tips_repaid(tips: list(int), domain: string) : bool =
-    // iterate over all the tips in list and set the repaid property to true
-    set_tips_repaid'(tips, domain)
-
-  stateful function set_tips_repaid'(tips : list(int), domain: string) : bool =
-    switch(tips)
-      []      => true
-      e :: l' =>
-        put(state{ websites[domain].tips[e].repaid = true })
-        set_tips_repaid'(l', domain)
-
-  stateful function challenge_generate(domain: string) : string =
-    let challenge = Bytes.to_str(String.blake2b(String.concat(Address.to_str(Call.caller), domain)))
-    is_website_present(domain)
-    put(state{ websites[domain].challenge = Some(challenge) })
-    let challenge_memory = String.concat("waellet-tip-verification=",challenge)
-    Chain.event(WebsiteChallengeGenerated(Call.caller, Chain.timestamp, challenge_memory))
-    challenge_memory
-
-  stateful function challenge_check(domain: string) : bool =
-    // check if an oracle query is already present for this
-    if (Map.size(state.websites[domain].queries) == 0)
-      let oracle_query : oracle_query(string, string) =
-        Oracle.query( state.oracle_service
-                , domain
-                , 30000
-                , RelativeTTL(200)
-                , RelativeTTL(200) )
-      put(state{ websites[domain].queries[Map.size(state.websites[domain].queries)] = oracle_query })
-    else
-      // check if already verified
-      if(state.websites[domain].verified == false)
-        // get answer
-        let answer = get_answer(state.websites[domain].queries[0])
-        switch(state.websites[domain].challenge)
-          Some(challenge) =>
-            if(answer == challenge)
-              put(state{ websites[domain].verified = true })
-              Chain.event(WebsiteVerified(Call.caller, Chain.timestamp, domain))
-
-    state.websites[domain].verified
-
-  function get_answer(query_id : oracle_query(string, string)) : string =
-    switch(Oracle.get_answer(state.oracle_service, query_id))
-      None    => "no answer"
-      Some(x) => x
-
-  function is_domain_owner(domain: string) : unit =
-    let memory_website = state.websites[domain].owner[Call.caller]
-    require( memory_website.date_to   != 0
-          && memory_website.date_from =< Chain.timestamp
-          && memory_website.date_to   >= Chain.timestamp
-      , "NOT_DOMAIN_OWNER")
-
-  function is_enough_balance(domain: string) : unit =
-    require(state.websites[domain].balance > 0, "INSUFFICIENT_BALANCE")
-
-  entrypoint all_domain_expire_dates(domain) : list(int) =
-    let domain_expires_list = Map.to_list(state.websites[domain].owner)
-    List.map(tuple_second, domain_expires_list)
-
-  function is_domain_expired(domain: string) : bool =
-    switch(Map.member(domain, state.websites))
-      false => true
-      true => is_domain_expired'(all_domain_expire_dates(domain))
-
-  function is_domain_expired'(domain_expires_list: list(int)) : bool =
-    switch(domain_expires_list)
-      [] => true
-      e :: l' =>
-        if(e =< Chain.timestamp)
-          false
-        else
-          is_domain_expired'(l')
-
-  stateful function is_website_present(domain: string) : unit =
-    if(!Map.member(domain, state.websites))
-      let new_website : website =
-        { domain      = domain,
-          challenge   = None,
-          verified    = false,
-          date_expire = 0,
-          owner       = {},
-          balance     = 0,
-          queries     = {},
-          tips        = {} }
-      put(state{ websites[domain] = new_website })
-      Chain.event(WebsiteAdded(Call.caller, Chain.timestamp, domain))
-  
-  // general helper functions //
-
-  function tuple_second(tuple) =
-    switch(tuple)
-      (_, e) => e.date_to
-
-  function sum(f : 'a => int, l : list('a)) : int =
-    List.foldr((x, y) => x + y, 0, List.map(f, l))
-
-  function is_greater_zero(x : int) : bool = x > 0
+  stateful function oracle_query_tip_url(url: string) : oracle_query(string, string) =
+    Oracle.query( state.oracle_service
+      , url
+      , 1
+      , RelativeTTL(200)
+      , RelativeTTL(200) )
