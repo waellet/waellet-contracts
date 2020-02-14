@@ -29,6 +29,6 @@
     "aeproject-lib": "1.0.1",
     "blake2b": "^2.1.3",
     "forgae-lib": "1.0.4",
-    "yarn": "1.15.2"
+    "yarn": "1.22.0"
   }
 }
